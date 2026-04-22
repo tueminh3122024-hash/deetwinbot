@@ -26,6 +26,7 @@ export interface AIState {
     currentClinicId: string | null
     setAvailableClinics: (clinics: Array<{ id: string; name: string }>) => void
     setCurrentClinicId: (id: string | null) => void
+    refreshTokens: () => void
 }
 
 const AIContext = createContext<AIState | undefined>(undefined)
@@ -142,6 +143,9 @@ export function AIProvider({ children }: { children: ReactNode }) {
         currentClinicId,
         setAvailableClinics,
         setCurrentClinicId,
+        refreshTokens: () => {
+            if (currentClinicId) fetchTokenBalance(currentClinicId)
+        }
     }
 
     return <AIContext.Provider value={value}>{children}</AIContext.Provider>

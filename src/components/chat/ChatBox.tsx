@@ -13,6 +13,7 @@ import VisionOCR from '@/components/chat/VisionOCR'
 import MetricsInputForm from '@/components/chat/MetricsInputForm'
 import { useHistory } from '@/hooks/useHistory'
 import { CreditCard } from 'lucide-react'
+import { useAI } from '@/components/providers/AIProvider'
 
 // ─────────────────────────────────────────────
 // Types
@@ -121,6 +122,7 @@ function ParsedContent({ text }: { text: string }) {
 // ChatBox — Main exported component
 // ─────────────────────────────────────────────
 export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }: ChatBoxProps) {
+    const { refreshTokens } = useAI()
     const [inputValue, setInputValue] = useState('')
     const [attachments, setAttachments] = useState<Attachment[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -174,6 +176,11 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
 
             // Local and Supabase sync handled via useHistory hook
             saveSession([...messages, message], { userId, clinicId })
+            
+            // Refresh token state to update UI in sidebar / tokens page automatically
+            if (used && clinicId) {
+                refreshTokens()
+            }
         },
         onError: (err) => console.error('[ChatBox] error:', err),
     })
@@ -204,8 +211,15 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
     // ── Submit ──
     const handleSend = () => {
         const text = inputValue.trim()
-        if (!text) return
-        sendMessage({ text })
+        if (!text && attachments.length === 0) return
+        
+        const attachFiles = attachments.map(a => a.file)
+        
+        sendMessage({ 
+            text: text || 'Gửi tệp đính kèm',
+            ...(attachFiles.length > 0 && { experimental_attachments: attachFiles })
+        })
+        
         setInputValue('')
         setAttachments([])
     }

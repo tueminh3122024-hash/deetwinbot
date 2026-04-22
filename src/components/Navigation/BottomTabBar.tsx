@@ -21,8 +21,11 @@ const clinicTabs: Tab[] = [
     { id: 'settings', label: 'Cài đặt',   icon: Settings,      href: '/settings' },
 ]
 
+import { History } from 'lucide-react'
+
 const userTabs: Tab[] = [
     { id: 'chat',     label: 'Chat',     icon: MessageSquare, href: '/chat' },
+    { id: 'history',  label: 'Lịch sử',  icon: History,       href: '/chat/history' },
     { id: 'bookings', label: 'Lịch hẹn', icon: CalendarDays,  href: '/chat/bookings' },
     { id: 'profile',  label: 'Hồ sơ',   icon: UserCircle,    href: '/chat/profile' },
 ]

@@ -38,8 +38,12 @@ export async function POST(request: NextRequest) {
                         },
                         {
                             type: 'text',
-                            text: 'Transcribe this audio to Vietnamese text. Return ONLY the transcribed text, nothing else. If the audio is unclear or empty, return an empty string.',
+                            text: `Bạn là AI chuyển file ghi âm thành văn bản tiếng Việt.
+HÃY CHÚ Ý: Nếu file âm thanh là tiếng ồn, tĩnh, hoặc không có tiếng người nói RÕ RÀNG, bạn PHẢI trả về chuỗi rỗng "". 
+TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT HOẶC ĐOÁN DỮ LIỆU.
+Nếu có tiếng người, dịch chính xác những gì họ nói và trả ra văn bản. Bạn chỉ trả về nội dung người dùng nói, không kèm bất kỳ giải thích nào.`,
                         },
+
                     ],
                 },
             ],
