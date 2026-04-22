@@ -36,7 +36,13 @@ export default function ClinicSettingsPage() {
             .eq('id', currentClinicId)
             .single()
             .then(({ data }) => {
-                if (data) setForm({ ...EMPTY, ...data })
+                if (data) {
+                    // Strip null values — React controlled inputs require strings, not null
+                    const sanitized = Object.fromEntries(
+                        Object.entries(data).map(([k, v]) => [k, v ?? ''])
+                    )
+                    setForm({ ...EMPTY, ...sanitized })
+                }
                 setLoading(false)
             })
     }, [currentClinicId])
