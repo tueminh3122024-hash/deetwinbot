@@ -1,31 +1,17 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, tool, convertToModelMessages } from 'ai';
 import { z } from 'zod';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-export async function POST(request: NextRequest) {
-    console.log('Request received at /api/chat');
-    // Temporary hardcoded response for pipe verification
+const google = createGoogleGenerativeAI({
+    apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
+})
 
+export const maxDuration = 60
 
-    try {
-        const body = await request.json();
-        console.log('Received body:', body);
-        const { messages: uiMessages, id } = body;
-        if (!uiMessages) {
-            throw new Error('Missing messages field in request body');
-        }
-
-        // Check for API key (optional for demo, but will throw if missing)
-        if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-            console.warn('GOOGLE_GENERATIVE_AI_API_KEY is not set. Using dummy key.');
-        } else {
-            console.log('GOOGLE_GENERATIVE_AI_API_KEY is present (length)', process.env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 'missing');
-        }
-        console.log('Gemini Request Sent with API Key:', !!process.env.GOOGLE_GENERATIVE_AI_API_KEY);
-
-        const systemPrompt = `Bạn là DeeTwin - Trợ lý Sức khỏe Kỹ thuật số (Digital Bio-Guardian) thuộc hệ sinh thái mBOS.
+// ─── Base DeeTwin system prompt ─────────────────────────────────────────────
+const BASE_SYSTEM_PROMPT = `Bạn là DeeTwin - Trợ lý Sức khỏe Kỹ thuật số (Digital Bio-Guardian) thuộc hệ sinh thái mBOS.
 
 Nhiệm vụ của bạn là hỗ trợ theo dõi chỉ số chuyển hóa (MSI), tư vấn sức khỏe dựa trên dữ liệu thực tế và kết nối người dùng với các Clinic chuyên khoa.
 
@@ -44,166 +30,206 @@ QUY TẮC ĐỊNH DẠNG (BẮT BUỘC - không được vi phạm):
 
 CHỈ SỐ SINH HỌC CỐT LÕI:
 
-- MSI (Metabolic Stability Index): Chỉ số ổn định chuyển hóa. Phản ánh sự cân bằng giữa nhịp tim và đường huyết.
+- MSI (Metabolic Stability Index): Chỉ số ổn định chuyển hóa. Phản ánh sự cân bằng giữa nhịp tim và đường huyết. Thang điểm 0-100.
 
 - MGC (Metabolic Glycemic Control): Hệ số kiểm soát Glucose. Mục tiêu lý tưởng là 90 mg/dL.
 
-- MFV (Metabolic Flow Velocity): Vận tốc dòng chuyển hóa.
+- MFV (Metabolic Flow Velocity): Vận tốc dòng chuyển hóa. Đơn vị ml/min. Bình thường > 60.
 
-- EIB (Energy Intake Balance): Năng lực chịu tải của cơ thể.
+- EIB (Energy Intake Balance): Năng lực cân bằng năng lượng. Đơn vị %. Bình thường > 80%.
 
 ---
 
 KHẢ NĂNG:
 
-- Phân tích dữ liệu: Nhận diện và giải thích các chỉ số từ thiết bị đeo hoặc ảnh chụp kết quả xét nghiệm (Vision).
+- Phân tích dữ liệu: Nhận diện và giải thích các chỉ số từ thiết bị đeo hoặc ảnh chụp kết quả xét nghiệm.
 
-- Nếu nhận được hình ảnh, kích hoạt chế độ Vision để trích xuất ngay các chỉ số (Huyết áp, Nhịp tim, Đường huyết...) và trả về kết quả phân tích.
+- Nếu nhận được hình ảnh, trích xuất ngay các chỉ số (Huyết áp, Nhịp tim, Đường huyết...) và trả về kết quả phân tích.
 
-- Dữ liệu của người dùng được đồng bộ hóa an toàn với hệ thống DeeTwin App và được bảo mật theo chuẩn HIPAA.
+- Dữ liệu được bảo mật theo chuẩn HIPAA.
 
 ---
 
 HÀNH ĐỘNG (CTA):
 
-- Nếu chỉ số MSI hoặc MGC có dấu hiệu bất ổn, giải thích nhẹ nhàng rồi gọi tool show_medical_lead_form để mời đặt lịch tư vấn sâu.
+- Nếu chỉ số MSI hoặc MGC bất ổn, giải thích nhẹ nhàng rồi gọi tool show_medical_lead_form để mời đặt lịch tư vấn.
 
-- Nếu người dùng hỏi về đặt lịch, hướng dẫn họ dùng [WIDGET:BOOKING] hoặc liên hệ qua Zalo/WhatsApp.
+- Nếu người dùng hỏi đặt lịch, hướng dẫn dùng [WIDGET:BOOKING] hoặc liên hệ Zalo/WhatsApp.
 
-- Luôn ưu tiên kết nối người dùng với Clinic hơn là tư vấn suông.
+- Luôn ưu tiên kết nối người dùng với Clinic hơn tư vấn suông.
 
-- Nếu không đủ dữ liệu để kết luận, yêu cầu cung cấp thêm chỉ số hoặc ảnh chụp, không đoán mò.
+- Nếu không đủ dữ liệu, yêu cầu cung cấp thêm chỉ số hoặc ảnh chụp.
 
 ---
 
-TOOLS:
-- show_tiktok_video: Nhúng video TikTok.
-- show_medical_lead_form: Hiển thị form đặt lịch khám/tư vấn.
-- show_msi_dashboard: Hiển thị bảng chỉ số chuyển hóa.
-
 MULTIMEDIA TAGS:
-- [VIDEO: URL] cho video hướng dẫn.
-- [WIDGET:PAY] để nạp token.
-- [WIDGET:BOOKING] để đặt lịch.`;
+- [VIDEO: URL] cho video hướng dẫn
+- [WIDGET:PAY] để nạp token
+- [WIDGET:BOOKING] để đặt lịch`
 
-        // Define tools
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json()
+        const { messages: uiMessages, id: clinicId } = body
+
+        if (!uiMessages) {
+            return new Response(JSON.stringify({ error: 'Missing messages' }), { status: 400 })
+        }
+
+        // ── Fetch clinic custom prompt and token balance ──────────────────────
+        let systemPrompt = BASE_SYSTEM_PROMPT
+        let currentTokenBalance = 0
+
+        if (clinicId) {
+            try {
+                const supabase = await createClient()
+                const { data: clinic } = await supabase
+                    .from('clinics')
+                    .select('custom_system_prompt, token_balance, bot_name')
+                    .eq('id', clinicId)
+                    .single()
+
+                if (clinic) {
+                    currentTokenBalance = clinic.token_balance ?? 0
+
+                    // Block if out of tokens
+                    if (currentTokenBalance <= 0) {
+                        return new Response(JSON.stringify({ error: 'Insufficient tokens' }), {
+                            status: 402,
+                            headers: { 'Content-Type': 'application/json' },
+                        })
+                    }
+
+                    // Inject custom prompt after base prompt
+                    if (clinic.custom_system_prompt?.trim()) {
+                        systemPrompt = `${BASE_SYSTEM_PROMPT}\n\n---\n\nHƯỚNG DẪN RIÊNG CỦA PHÒNG MẠCH:\n${clinic.custom_system_prompt}`
+                    }
+                }
+            } catch (e) {
+                console.warn('[chat] Could not fetch clinic config:', e)
+            }
+        }
+
+        // ── Convert UI messages → model messages ──────────────────────────────
+        const messages = await convertToModelMessages(uiMessages)
+
+        // ── Define tools ──────────────────────────────────────────────────────
         const tools = {
             show_tiktok_video: tool({
-                description: 'Embed a TikTok video player with the given video ID',
+                description: 'Embed a TikTok video in the chat when discussing health topics with video examples',
                 inputSchema: z.object({
-                    videoId: z.string().describe('The TikTok video ID (e.g., "v123456789")'),
+                    videoId: z.string().describe('The TikTok video ID to embed'),
                     caption: z.string().optional().describe('Optional caption for the video'),
                 }),
-                execute: async ({ videoId, caption }) => {
-                    // Return data that the frontend can use to render the TikTokPlayer widget
-                    return {
-                        widget: 'TikTokPlayer',
-                        videoId,
-                        caption,
-                    };
-                },
+                execute: async ({ videoId, caption }) => ({ widget: 'TikTokPlayer', videoId, caption }),
             }),
             show_medical_lead_form: tool({
-                description: 'Display a medical lead form to capture patient information',
+                description: 'Display a medical lead form to capture patient information for clinic booking',
                 inputSchema: z.object({
-                    clinicId: z.string().describe('The ID of the clinic to associate the lead with'),
-                    defaultName: z.string().optional().describe('Default patient name'),
+                    clinicId: z.string().describe('The clinic ID'),
+                    defaultName: z.string().optional(),
                 }),
-                execute: async ({ clinicId, defaultName }) => {
-                    return {
-                        widget: 'MedicalLeadForm',
-                        clinicId,
-                        defaultName,
-                    };
-                },
+                execute: async ({ clinicId, defaultName }) => ({ widget: 'MedicalLeadForm', clinicId, defaultName }),
             }),
             show_msi_dashboard: tool({
-                description: 'Display a dashboard with clinic sales and performance metrics',
+                description: 'Show the MSI/metabolic dashboard for a clinic',
                 inputSchema: z.object({
-                    clinicId: z.string().describe('The clinic ID to show metrics for'),
-                    timeframe: z.enum(['day', 'week', 'month']).default('week').describe('Timeframe for metrics'),
+                    clinicId: z.string(),
+                    timeframe: z.enum(['day', 'week', 'month', 'quarter']).optional(),
                 }),
-                execute: async ({ clinicId, timeframe }) => {
-                    return {
-                        widget: 'MSIDashboard',
-                        clinicId,
-                        timeframe,
-                    };
-                },
+                execute: async ({ clinicId, timeframe }) => ({ widget: 'MSIDashboard', clinicId, timeframe }),
             }),
-        };
+        }
 
-        const messages = await convertToModelMessages(uiMessages, { tools });
-
-        const google = createGoogleGenerativeAI({
-            apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-        });
-
-        let result;
+        // ── Stream response ───────────────────────────────────────────────────
+        let result
         try {
             result = streamText({
-                model: google('gemini-3-flash-preview'), // Valid 2026 model name
+                model: google('gemini-3-flash-preview'),
                 system: systemPrompt,
                 messages,
                 tools,
-                onFinish: async ({ text }) => {
-                    if (id && text) {
-                        const supabase = await createClient();
-                        // Save assistant message
-                        await supabase.from('messages').insert({
-                            clinic_id: id,
-                            role: 'assistant',
-                            content: text
-                        });
-                    }
-                }
-            });
+                onFinish: async ({ text, usage }) => {
+                    if (!clinicId) return
+                    try {
+                        const supabase = await createClient()
 
-            // Save user message (last one in history)
-            if (id && uiMessages && uiMessages.length > 0) {
-                const lastUserMessage = uiMessages[uiMessages.length - 1];
-                if (lastUserMessage.role === 'user') {
-                    const supabase = await createClient();
-                    await supabase.from('messages').insert({
-                        clinic_id: id,
-                        role: 'user',
-                        content: lastUserMessage.content || lastUserMessage.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
-                    });
-                }
-            }
-        } catch (initError) {
-            console.error('Model initialization failed, attempting fallback to gemini-2.5-flash...');
+                        // 1. Atomic token deduction using RPC
+                        const tokensUsed = usage?.totalTokens ?? 0
+                        if (tokensUsed > 0) {
+                            await supabase.rpc('decrement_clinic_tokens', {
+                                clinic_id: clinicId,
+                                amount: tokensUsed,
+                            })
+                        }
+
+                        // 2. Save assistant message to messages table
+                        if (text) {
+                            await supabase.from('messages').insert({
+                                clinic_id: clinicId,
+                                role: 'assistant',
+                                content: text,
+                            })
+                        }
+
+                        // 3. Save last user message
+                        const lastUser = uiMessages.at(-1)
+                        if (lastUser?.role === 'user') {
+                            const userText = Array.isArray(lastUser.content)
+                                ? lastUser.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+                                : lastUser.content
+                            if (userText) {
+                                await supabase.from('messages').insert({
+                                    clinic_id: clinicId,
+                                    role: 'user',
+                                    content: userText,
+                                })
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[chat] onFinish DB error:', e)
+                    }
+                },
+            })
+        } catch {
+            // Fallback to stable model
+            console.warn('[chat] Primary model failed, falling back to gemini-2.5-flash')
             result = streamText({
                 model: google('gemini-2.5-flash'),
                 system: systemPrompt,
                 messages,
                 tools,
-            });
+            })
         }
 
-        const crypto = await import('crypto');
-        const response = result.toUIMessageStreamResponse({ 
-            generateMessageId: () => id ?? crypto.randomUUID()
-        });
-        response.headers.set("Access-Control-Allow-Origin", "*");
-        response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        return response;
+        const crypto = await import('crypto')
+        const response = result.toUIMessageStreamResponse({
+            generateMessageId: () => clinicId ?? crypto.randomUUID(),
+        })
+        response.headers.set('Access-Control-Allow-Origin', '*')
+        response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        return response
+
     } catch (error: any) {
-        console.dir(error, { depth: null });
-        // Log additional context
-        console.log('API key length:', process.env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 'missing');
-        console.log('Model attempted: gemini-1.5-flash'); 
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error('[chat] Error:', error)
         return new Response(
             JSON.stringify({
-                error: 'Chatbot request failed',
-                message: errorMessage,
-                stack: errorStack,
-                hint: 'Check your GOOGLE_GENERATIVE_AI_API_KEY and model availability.'
+                error: 'Chat request failed',
+                message: error.message,
+                hint: 'Check GOOGLE_GENERATIVE_AI_API_KEY and model availability.',
             }),
             { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-        );
+        )
     }
+}
+
+export async function OPTIONS() {
+    return new Response(null, {
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    })
 }

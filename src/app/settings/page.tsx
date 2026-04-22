@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAI } from '@/components/providers/AIProvider'
 import { supabase } from '@/lib/supabase/client'
 import { Save, Building2, Clock, MapPin, User, Hash, Stethoscope, Loader2, CheckCircle2 } from 'lucide-react'
+import BotSettings from '@/components/admin/BotSettings'
 
 interface ClinicForm {
     name: string
@@ -168,6 +169,10 @@ export default function ClinicSettingsPage() {
                         />
                     </div>
                 )}
+                {/* Section: Bot AI */}
+                <div className="pt-4 border-t border-[#1f2937]">
+                    <BotSettings />
+                </div>
             </div>
         </div>
     )

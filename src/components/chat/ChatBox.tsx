@@ -11,7 +11,7 @@ import { TikTokPlayer, MedicalLeadForm, MSIDashboard, BookingWidget, VideoWidget
 import VoiceMic from '@/components/chat/VoiceMic'
 import VisionOCR from '@/components/chat/VisionOCR'
 import MetricsInputForm from '@/components/chat/MetricsInputForm'
-import { useChatStorage } from '@/hooks/useChatStorage'
+import { useHistory } from '@/hooks/useHistory'
 import { CreditCard } from 'lucide-react'
 
 // ─────────────────────────────────────────────
@@ -127,8 +127,23 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
-    const [sessionId] = useState(() => Math.random().toString(36).slice(2))
-    const { saveMessagesLocally } = useChatStorage(sessionId)
+    const [sessionId] = useState(() => `session-${Math.random().toString(36).slice(2)}`)
+    const { sessions, saveSession } = useHistory(sessionId)
+
+    // Android keyboard jitter fix — visualViewport API
+    useEffect(() => {
+        const setVVH = () => {
+            const h = window.visualViewport?.height ?? window.innerHeight
+            document.documentElement.style.setProperty('--vvh', `${h}px`)
+        }
+        setVVH()
+        window.visualViewport?.addEventListener('resize', setVVH)
+        window.visualViewport?.addEventListener('scroll', setVVH)
+        return () => {
+            window.visualViewport?.removeEventListener('resize', setVVH)
+            window.visualViewport?.removeEventListener('scroll', setVVH)
+        }
+    }, [])
 
     // Auto-resize textarea
     useEffect(() => {
@@ -148,31 +163,17 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
             body: { id: clinicId },
         }),
         onFinish: async ({ message }) => {
-            const responseText = getMessageText(message)
-
-            // Token deduction
+            // Token deduction (local UI update only, API route handles DB sync)
             const usage = (message as any).usage
             const used = usage?.totalTokens ?? 0
             if (used && clinicId) {
                 onTokensUsed?.(used)
-                await supabase.rpc('decrement_clinic_tokens', { clinic_id: clinicId, amount: used })
+                // We let the API route handle the actual decrement_clinic_tokens RPC
+                // to prevent double-counting.
             }
 
-            // Save to chat_history
-            const lastUserMsg = messages.findLast?.((m) => m.role === 'user')
-            const userText = getMessageText(lastUserMsg)
-            if (userText && responseText) {
-                await supabase.from('chat_history').insert({
-                    user_id: userId ?? null,
-                    clinic_id: clinicId ?? null,
-                    message: userText,
-                    response: responseText,
-                    tokens_used: used,
-                })
-            }
-
-            // Local save
-            saveMessagesLocally([...messages, message])
+            // Local and Supabase sync handled via useHistory hook
+            saveSession([...messages, message], { userId, clinicId })
         },
         onError: (err) => console.error('[ChatBox] error:', err),
     })
