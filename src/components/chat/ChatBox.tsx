@@ -100,7 +100,7 @@ function ParsedContent({ text }: { text: string }) {
                     </div>
                 )
             } else if (type === 'BOOKING') {
-                const formUrl = m.url || 'https://tally.so/embed/w7vX8m'
+                const formUrl = m.url || 'https://tally.so/embed/D4vRA5'
                 parts.push(
                     <div key={nextKey('booking')} className="my-3">
                         <BookingWidget formUrl={formUrl} />
