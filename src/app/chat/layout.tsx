@@ -1,10 +1,10 @@
 import { AIProvider } from '@/components/providers/AIProvider'
 import AppShell from '@/components/Navigation/AppShell'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function ChatLayout({ children }: { children: React.ReactNode }) {
     return (
         <AIProvider>
-            <AppShell role="clinic">
+            <AppShell role="user">
                 {children}
             </AppShell>
         </AIProvider>
