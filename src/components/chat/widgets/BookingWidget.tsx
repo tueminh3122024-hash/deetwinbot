@@ -5,10 +5,16 @@
  * Embeds a Tally form via iframe with styling optimized for the DeeTwin chatbot.
  */
 export const BookingWidget = ({ formUrl }: { formUrl: string }) => {
+  // Convert standard /r/ links to /embed/ links automatically for iframe compatibility
+  let safeUrl = formUrl
+  if (safeUrl.includes('tally.so/r/')) {
+    safeUrl = safeUrl.replace('tally.so/r/', 'tally.so/embed/')
+  }
+
   // Ensure the URL has the necessary parameters for transparency and dynamic height
-  const enhancedUrl = formUrl.includes('?') 
-    ? `${formUrl}&transparentBackground=1&dynamicHeight=1`
-    : `${formUrl}?transparentBackground=1&dynamicHeight=1`;
+  const enhancedUrl = safeUrl.includes('?') 
+    ? `${safeUrl}&transparentBackground=1&dynamicHeight=1`
+    : `${safeUrl}?transparentBackground=1&dynamicHeight=1`;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-[#1f2937] bg-[#0a0a0a] animate-in fade-in zoom-in duration-300">
