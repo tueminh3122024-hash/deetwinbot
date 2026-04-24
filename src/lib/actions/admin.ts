@@ -1,167 +1,187 @@
-
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
-import { Clinic, Analytics } from '@/lib/types/admin'
+import { adminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
-export async function fetchClinics(): Promise<Clinic[]> {
-    const supabase = await createClient()
+/**
+ * Ensures an admin user has a corresponding profile record with 'admin' role.
+ */
+export async function ensureAdminProfile(userId: string) {
+    try {
+        const { data: existing } = await adminClient
+            .from('profiles')
+            .select('id')
+            .eq('id', userId)
+            .maybeSingle()
 
-    // Fetch clinics with token balance and lead count
-    const { data: clinics, error } = await supabase
+        if (!existing) {
+            const { error } = await adminClient
+                .from('profiles')
+                .insert({
+                    id: userId,
+                    role: 'admin',
+                    created_at: new Date().toISOString()
+                })
+            if (error) throw error
+        } else {
+            // Force update role to admin if it's not (for safety during development)
+            await adminClient
+                .from('profiles')
+                .update({ role: 'admin' })
+                .eq('id', userId)
+        }
+        return { success: true }
+    } catch (err: any) {
+        return { success: false, error: err.message }
+    }
+}
+
+/**
+ * Fetch all clinics for management
+ */
+export async function fetchClinics() {
+    const { data, error } = await adminClient
         .from('clinics')
-        .select('id, name, token_balance, status')
-        .order('id', { ascending: false })
+        .select('*')
+        .order('created_at', { ascending: false })
 
     if (error) {
         console.error('Error fetching clinics:', error)
         return []
     }
-
-    // For each clinic, fetch total leads
-    const clinicsWithLeads = await Promise.all(
-        clinics.map(async (clinic) => {
-            let leadsCount = 0
-            try {
-                const { count, error } = await supabase
-                    .from('leads')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('clinic_id', clinic.id)
-                if (!error) leadsCount = count || 0
-            } catch (err) {
-                console.error('Error fetching leads for clinic', clinic.id, err)
-            }
-            return {
-                ...clinic,
-                total_leads: leadsCount,
-                revenue: leadsCount * 0.1, // 10% commission from leads count (e.g. 10 leads = 1.0 revenue)
-            } as Clinic
-        })
-    )
-
-    return clinicsWithLeads
+    
+    // Add some mock analytics per clinic for the dashboard
+    return (data || []).map(clinic => ({
+        ...clinic,
+        total_leads: 0,
+        revenue: (clinic.token_balance || 0) * 0.1 // Just a dummy calculation
+    }))
 }
 
-export async function fetchAnalytics(): Promise<Analytics> {
-    const supabase = await createClient()
+/**
+ * Fetch global analytics
+ */
+export async function fetchAnalytics() {
+    try {
+        const { data: clinics } = await adminClient.from('clinics').select('token_balance')
+        const totalActiveClinics = clinics?.length || 0
+        const totalTokensSold = clinics?.reduce((acc, c) => acc + Number(c.token_balance || 0), 0) || 0
 
-    // Total active clinics
-    const { count: activeClinicsCount } = await supabase
-        .from('clinics')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active')
-
-    // Total tokens sold (sum of token_balance across all clinics)
-    const { data: clinics } = await supabase
-        .from('clinics')
-        .select('token_balance')
-
-    const totalTokensSold = clinics?.reduce((sum, clinic) => sum + (clinic.token_balance || 0), 0) || 0
-
-    // Projected commission (10% of total tokens sold)
-    const projectedCommission = totalTokensSold * 0.1
-
-    return {
-        totalActiveClinics: activeClinicsCount || 0,
-        totalTokensSold,
-        projectedCommission,
+        return {
+            totalActiveClinics,
+            totalTokensSold,
+            projectedCommission: totalTokensSold * 0.1
+        }
+    } catch (err) {
+        return { totalActiveClinics: 0, totalTokensSold: 0, projectedCommission: 0 }
     }
 }
 
+/**
+ * Top up tokens for a clinic
+ */
 export async function topUpTokens(clinicId: string, amount: number) {
-    const supabase = await createClient()
-
-    // 1. Check if Organization/Clinic exists before transaction
-    const { data: clinic, error: clinicCheckError } = await supabase
-        .from('clinics')
-        .select('id')
-        .eq('id', clinicId)
-        .single()
-
-    if (clinicCheckError || !clinic) {
-        console.error('Organization check failed:', clinicCheckError)
-        return { success: false, error: 'Phòng mạch không tồn tại (Organization check failed)' }
-    }
-
-    // 2. Insert a TOPUP record
-    const { data, error } = await supabase
-        .from('token_transactions')
-        .insert({
-            clinic_id: clinicId,
-            amount,
-            type: 'TOPUP',
+    try {
+        const { error } = await adminClient.rpc('increment_clinic_tokens', {
+            p_clinic_id: clinicId,
+            p_amount: amount
         })
 
-    if (error) {
-        console.error('Lỗi thực sự đây nè bro:', error.message)
-        return { success: false, error: error.message }
+        if (error) throw error
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (err: any) {
+        return { success: false, error: err.message }
     }
-
-    // Update clinic's token balance
-    console.log('Final clinic_id used:', clinicId)
-    const { data: clinicData, error: fetchError } = await supabase
-        .from('clinics')
-        .select('token_balance')
-        .eq('id', clinicId)
-        .single()
-
-    if (fetchError || !clinicData) {
-        console.error('Error fetching clinic for token update:', fetchError)
-        return { success: false, error: fetchError?.message || 'Clinic not found' }
-    }
-
-    const newTokenBalance = clinicData.token_balance + amount
-
-    // 3. Update clinic's token balance
-    const { error: updateError } = await supabase
-        .from('clinics')
-        .update({ token_balance: newTokenBalance })
-        .eq('id', clinicId)
-
-    if (updateError) {
-        console.error('Error updating clinic balance:', updateError)
-    }
-
-    // 4. Update subscriptions table (Stage 3 requirement)
-    // We'll upsert to ensure the record exists for this clinic
-    const { error: subError } = await supabase
-        .from('subscriptions')
-        .upsert({
-            clinic_id: clinicId,
-            token_balance: newTokenBalance,
-            last_topup_at: new Date().toISOString()
-        }, { onConflict: 'clinic_id' })
-
-    if (subError) {
-        console.error('Error updating subscriptions:', subError)
-    }
-
-    revalidatePath('/admin')
-    return { success: true }
 }
 
-export async function ensureAdminProfile(userId: string) {
-    const supabase = await createClient()
-    // Check if profile exists
-    const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
-    if (existing) {
-        return { success: true, message: 'Profile already exists' }
+/**
+ * Fetch a system setting by key
+ */
+export async function getSystemSetting<T>(key: string, defaultValue: T): Promise<T> {
+    try {
+        const { data, error } = await adminClient
+            .from('system_settings')
+            .select('value')
+            .eq('key', key)
+            .maybeSingle()
+
+        if (error || !data) return defaultValue
+        return data.value as T
+    } catch (err) {
+        console.error(`[admin/action] Error getting setting ${key}:`, err)
+        return defaultValue
     }
-    // Insert profile with admin role
-    const { error } = await supabase
-        .from('profiles')
-        .insert({
-            id: userId,
-            role: 'admin',
-        })
-    if (error) {
-        console.error('Error creating admin profile:', error)
-        return { success: false, error: error.message }
+}
+
+/**
+ * Update a system setting
+ */
+export async function updateSystemSetting(key: string, value: any) {
+    try {
+        const { error } = await adminClient
+            .from('system_settings')
+            .upsert({ 
+                key, 
+                value, 
+                updated_at: new Date().toISOString() 
+            }, { onConflict: 'key' })
+
+        if (error) throw error
+        
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (err: any) {
+        console.error(`[admin/action] Error updating setting ${key}:`, err)
+        return { success: false, error: err.message }
     }
-    return { success: true, message: 'Admin profile created' }
+}
+
+/**
+ * Update clinic details (Email/Phone) - Admin only
+ */
+export async function updateClinicAdmin(clinicId: string, updates: any) {
+    try {
+        const { error } = await adminClient
+            .from('clinics')
+            .update(updates)
+            .eq('id', clinicId)
+
+        if (error) throw error
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (err: any) {
+        return { success: false, error: err.message }
+    }
+}
+
+/**
+ * Create a new clinic - Admin only
+ */
+export async function createClinic(data: {
+    name: string
+    email: string
+    phone: string
+    description?: string
+    legal_info?: string
+    address?: string
+}) {
+    try {
+        const { error } = await adminClient
+            .from('clinics')
+            .insert({
+                ...data,
+                status: 'active',
+                token_balance: 0,
+                created_at: new Date().toISOString(),
+                slug: data.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).slice(2, 5)
+            })
+
+        if (error) throw error
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (err: any) {
+        console.error('[admin/action] Error creating clinic:', err)
+        return { success: false, error: err.message }
+    }
 }

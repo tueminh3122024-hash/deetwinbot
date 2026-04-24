@@ -1,12 +1,17 @@
 'use client'
 
-import { Coins } from 'lucide-react'
+import { Suspense } from 'react'
+import { Coins, ArrowLeft, User } from 'lucide-react'
 import { useAI } from '@/components/providers/AIProvider'
 import { UserDropdown } from '@/components/auth/UserDropdown'
 import { Badge } from '@/components/ui/badge'
 import ChatBox from '@/components/chat/ChatBox'
+import { useSearchParams, useRouter } from 'next/navigation'
 
-export default function ClinicChatPage() {
+function ClinicChatInner() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const bookingId = searchParams.get('booking_id')
     const { tokensRemaining, setTokensRemaining, currentClinicId } = useAI()
 
     const handleTokensUsed = (used: number) => {
@@ -18,12 +23,25 @@ export default function ClinicChatPage() {
             {/* ── Header ── */}
             <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur-lg border-b border-[#1f2937]">
                 <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1DA1F2] to-teal-500 shadow-md" />
+                    {bookingId ? (
+                        <button
+                            onClick={() => router.push('/appointments')}
+                            className="h-8 w-8 rounded-xl bg-[#1f2937] flex items-center justify-center hover:bg-gray-700 transition-all active:scale-95"
+                        >
+                            <ArrowLeft size={15} className="text-gray-300" />
+                        </button>
+                    ) : (
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1DA1F2] to-teal-500 shadow-md" />
+                    )}
                     <div>
-                        <p className="text-white text-sm font-bold tracking-tight leading-none">DeeTwin</p>
+                        <p className="text-white text-sm font-bold tracking-tight leading-none">
+                            {bookingId ? 'Chat với bệnh nhân' : 'DeeTwin'}
+                        </p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            <span className="text-[10px] text-gray-500">Trợ lý đang trực tuyến</span>
+                            <span className="text-[10px] text-gray-500">
+                                {bookingId ? 'Đang trong phiên khám' : 'Trợ lý đang trực tuyến'}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -42,9 +60,22 @@ export default function ClinicChatPage() {
                 <ChatBox
                     clinicId={currentClinicId}
                     onTokensUsed={handleTokensUsed}
-                    placeholder="Hỏi DeeTwin về chỉ số MSI, MGC..."
+                    bookingId={bookingId}
+                    placeholder={bookingId ? 'Nhắn tin với bệnh nhân...' : 'Hỏi DeeTwin về chỉ số MSI, MGC...'}
                 />
             </div>
         </div>
+    )
+}
+
+export default function ClinicChatPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-full items-center justify-center">
+                <div className="h-8 w-8 rounded-full border-2 border-[#1DA1F2] border-t-transparent animate-spin" />
+            </div>
+        }>
+            <ClinicChatInner />
+        </Suspense>
     )
 }

@@ -5,6 +5,13 @@ export interface Clinic {
     total_leads: number
     revenue: number
     status: 'active' | 'inactive' | 'suspended'
+    phone?: string          // Unique Vietnamese phone number
+    email?: string          // Identifying email
+    description?: string
+    address?: string
+    legal_info?: string
+    slug?: string           // URL friendly name
+    system_prompt_2?: string // Optional second custom AI system prompt
     created_at?: string
 }
 

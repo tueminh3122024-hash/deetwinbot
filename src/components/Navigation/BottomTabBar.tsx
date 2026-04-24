@@ -15,19 +15,20 @@ interface Tab {
 }
 
 const clinicTabs: Tab[] = [
-    { id: 'chat',     label: 'Chat',      icon: MessageSquare, href: '/' },
-    { id: 'patients', label: 'Bệnh nhân', icon: Users,         href: '/patients' },
-    { id: 'tokens',   label: 'Tokens',    icon: Coins,         href: '/tokens' },
-    { id: 'settings', label: 'Cài đặt',   icon: Settings,      href: '/settings' },
+    { id: 'chat', label: 'Chat', icon: MessageSquare, href: '/' },
+    { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, href: '/appointments' },
+    { id: 'patients', label: 'Bệnh nhân', icon: Users, href: '/patients' },
+    { id: 'tokens', label: 'Tokens', icon: Coins, href: '/tokens' },
+    { id: 'settings', label: 'Cài đặt', icon: Settings, href: '/settings' },
 ]
 
 import { History } from 'lucide-react'
 
 const userTabs: Tab[] = [
-    { id: 'chat',     label: 'Chat',     icon: MessageSquare, href: '/chat' },
-    { id: 'history',  label: 'Lịch sử',  icon: History,       href: '/chat/history' },
-    { id: 'bookings', label: 'Lịch hẹn', icon: CalendarDays,  href: '/chat/bookings' },
-    { id: 'profile',  label: 'Hồ sơ',   icon: UserCircle,    href: '/chat/profile' },
+    { id: 'chat', label: 'Chat', icon: MessageSquare, href: '/chat' },
+    { id: 'history', label: 'Lịch sử', icon: History, href: '/chat/history' },
+    { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, href: '/chat/appointments' },
+    { id: 'profile', label: 'Hồ sơ', icon: UserCircle, href: '/chat/profile' },
 ]
 
 function NavItem({ tab, isActive, onClick, collapsed }: {
@@ -69,11 +70,13 @@ export function DesktopSidebar({ role }: { role: Role }) {
     return (
         <aside className="hidden md:flex flex-col w-60 h-full border-r border-[#1f2937] bg-black flex-shrink-0">
             {/* Logo */}
-            <div className="flex items-center gap-3 px-5 py-5 border-b border-[#1f2937]">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1DA1F2] to-teal-500 flex items-center justify-center flex-shrink-0">
-                    <Zap size={14} className="text-white" />
-                </div>
-                <span className="text-white font-bold tracking-tight text-base">DeeTwin</span>
+            <div className="flex items-center gap-3 px-5 py-6 border-b border-[#1f2937]">
+                <img 
+                    src="https://deetwinapp.vercel.app/assets/public/avatar.995cc35baa763d8aaef9a5fe3954fe7d.gif" 
+                    alt="DeeTwin Logo" 
+                    className="h-12 w-12 rounded-xl"
+                />
+                <span className="text-white font-bold tracking-tight text-xl bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">DeeTwin</span>
             </div>
 
             {/* Nav */}
@@ -98,7 +101,7 @@ export function DesktopSidebar({ role }: { role: Role }) {
                     <div className="bg-[#0d1a2a] border border-[#1DA1F2]/20 rounded-xl p-3">
                         <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Tokens còn lại</p>
                         <p className="text-white font-bold text-lg tabular-nums">
-                            {tokensRemaining.toLocaleString('vi-VN')}
+                            {tokensRemaining.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                         </p>
                     </div>
                 </div>

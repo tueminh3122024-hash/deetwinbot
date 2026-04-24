@@ -1,4 +1,4 @@
-'use client'
+import Script from 'next/script'
 
 /**
  * BookingWidget component
@@ -17,16 +17,20 @@ export const BookingWidget = ({ formUrl }: { formUrl: string }) => {
     : `${safeUrl}?transparentBackground=1&dynamicHeight=1`;
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-[#1f2937] bg-[#0a0a0a] animate-in fade-in zoom-in duration-300">
-      <iframe
-        src={enhancedUrl}
-        width="100%"
-        height="500" // Default height, Tally script can handle dynamic height if included
-        frameBorder="0"
-        title="DeeTwin Booking Form"
-        className="w-full"
-      ></iframe>
-    </div>
+    <>
+      <Script src="https://tally.so/widgets/embed.js" strategy="afterInteractive" />
+      <div className="w-full overflow-hidden rounded-2xl border border-[#1f2937] bg-[#0a0a0a] animate-in fade-in zoom-in duration-300">
+        <iframe
+          src={enhancedUrl}
+          width="100%"
+          height="500" // Default height, Tally script will override if successful
+          frameBorder="0"
+          title="DeeTwin Booking Form"
+          className="w-full"
+          data-tally-layout="inset"
+        ></iframe>
+      </div>
+    </>
   );
 };
 

@@ -4,7 +4,11 @@ import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useChat } from '@ai-sdk/react'
 import { type UIMessage, isToolUIPart, DefaultChatTransport } from 'ai'
-import { Send, Paperclip, Image as ImageIcon, ArrowRight, X } from 'lucide-react'
+import { 
+    Send, Paperclip, Image as ImageIcon, ArrowRight, X, 
+    CreditCard, Flame, CheckCircle2, Target, FileText, 
+    Sparkles, Zap, Activity 
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { uploadMedicalImage } from '@/lib/supabase/storage'
 import { TikTokPlayer, MedicalLeadForm, MSIDashboard, BookingWidget, VideoWidget } from '@/components/chat/widgets'
@@ -12,7 +16,6 @@ import VoiceMic from '@/components/chat/VoiceMic'
 import VisionOCR from '@/components/chat/VisionOCR'
 import MetricsInputForm from '@/components/chat/MetricsInputForm'
 import { useHistory } from '@/hooks/useHistory'
-import { CreditCard } from 'lucide-react'
 import { useAI } from '@/components/providers/AIProvider'
 
 // ─────────────────────────────────────────────
@@ -34,6 +37,8 @@ interface ChatBoxProps {
     onTokensUsed?: (tokens: number) => void
     /** Optional placeholder override */
     placeholder?: string
+    /** Booking ID for shared clinic↔user chat session */
+    bookingId?: string | null
 }
 
 // ─────────────────────────────────────────────
@@ -53,32 +58,65 @@ function getMessageText(message: any): string {
 function ParsedContent({ text }: { text: string }) {
     if (!text) return null
 
+    // 1. Clean up "bold" symbols (strip **** and **)
+    let cleanText = text.replace(/\*\*\*\*/g, '').replace(/\*\*/g, '')
+
+    // 2. Specialized icon replacements
+    // Replace "###" with a fire icon marker
+    cleanText = cleanText.replace(/^###\s*/gm, '[[ICON:FIRE]] ')
+    
+    // Replace Keywords with icon markers
+    const keywordMap: Record<string, string> = {
+        'Kết luận': '[[ICON:TARGET]]',
+        'Tổng hợp': '[[ICON:FILE]]',
+        'Summary': '[[ICON:FILE]]',
+        'Tóm tắt': '[[ICON:FILE]]'
+    }
+
+    Object.entries(keywordMap).forEach(([word, icon]) => {
+        const regex = new RegExp(`^${word}:?`, 'gm')
+        cleanText = cleanText.replace(regex, `${icon} ${word}`)
+    })
+
     const videoRegex = /\[VIDEO:\s*(https?:\/\/[^\]]+)\]/g
     const widgetRegex = /\[WIDGET:\s*(\w+)(?::([^\s\]]+))?\]/g
+    const iconRegex = /\[\[ICON:(\w+)\]\]/g
+    
     const parts: React.ReactNode[] = []
     let lastIndex = 0
     const allMatches: any[] = []
     let keyCounter = 0
     const nextKey = (prefix: string) => `${prefix}-${keyCounter++}`
 
+    // Collect all matches for complex parsing
     videoRegex.lastIndex = 0
     let vMatch
-    while ((vMatch = videoRegex.exec(text)) !== null) {
+    while ((vMatch = videoRegex.exec(cleanText)) !== null) {
         allMatches.push({ index: vMatch.index, length: vMatch[0].length, type: 'video', value: vMatch[1] })
     }
 
     widgetRegex.lastIndex = 0
     let wMatch
-    while ((wMatch = widgetRegex.exec(text)) !== null) {
+    while ((wMatch = widgetRegex.exec(cleanText)) !== null) {
         allMatches.push({ index: wMatch.index, length: wMatch[0].length, type: 'widget', name: wMatch[1], url: wMatch[2] })
+    }
+
+    iconRegex.lastIndex = 0
+    let iMatch
+    while ((iMatch = iconRegex.exec(cleanText)) !== null) {
+        allMatches.push({ index: iMatch.index, length: iMatch[0].length, type: 'icon', name: iMatch[1] })
     }
 
     allMatches.sort((a, b) => a.index - b.index)
 
     allMatches.forEach((m) => {
         if (m.index > lastIndex) {
-            parts.push(<p key={nextKey('text')} className="whitespace-pre-wrap mb-2 leading-relaxed">{text.substring(lastIndex, m.index)}</p>)
+            const txt = cleanText.substring(lastIndex, m.index)
+            if (txt.trim()) {
+                parts.push(<p key={nextKey('text')} className="whitespace-pre-wrap mb-2 leading-relaxed">{txt}</p>)
+            }
         }
+        
         if (m.type === 'video' && m.value) {
             parts.push(
                 <div key={nextKey('video')} className="my-3">
@@ -107,30 +145,58 @@ function ParsedContent({ text }: { text: string }) {
                     </div>
                 )
             }
+        } else if (m.type === 'icon') {
+            if (m.name === 'FIRE') parts.push(<Flame key={nextKey('icon')} size={18} className="text-orange-500 inline mr-1 mb-1" />)
+            if (m.name === 'TARGET') parts.push(<Target key={nextKey('icon')} size={16} className="text-[#1DA1F2] inline mr-1 mb-0.5" />)
+            if (m.name === 'FILE') parts.push(<FileText key={nextKey('icon')} size={16} className="text-emerald-400 inline mr-1 mb-0.5" />)
         }
+        
         lastIndex = m.index + m.length
     })
 
-    if (lastIndex < text.length) {
-        parts.push(<p key={nextKey('text-final')} className="whitespace-pre-wrap leading-relaxed">{text.substring(lastIndex)}</p>)
+    if (lastIndex < cleanText.length) {
+        const finalTxt = cleanText.substring(lastIndex)
+        if (finalTxt.trim()) {
+            parts.push(<p key={nextKey('text-final')} className="whitespace-pre-wrap leading-relaxed">{finalTxt}</p>)
+        }
     }
 
-    return <div className="text-sm">{parts.length > 0 ? parts : <p className="whitespace-pre-wrap leading-relaxed text-sm">{text}</p>}</div>
+    return <div className="text-sm">{parts.length > 0 ? parts : <p className="whitespace-pre-wrap leading-relaxed text-sm">{cleanText}</p>}</div>
+}
+
+function TypingIndicator() {
+    return (
+        <div className="flex justify-start">
+            <div className="bg-[#111] border border-[#1f2937] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5 shadow-xl">
+                <span className="text-xs text-gray-500 font-medium mr-1">AI DeeTwin đang xử lý</span>
+                {[0, 1, 2].map((i) => (
+                    <span 
+                        key={i} 
+                        className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce" 
+                        style={{ animationDelay: `${i * 0.15}s` }} 
+                    />
+                ))}
+            </div>
+        </div>
+    )
 }
 
 // ─────────────────────────────────────────────
 // ChatBox — Main exported component
 // ─────────────────────────────────────────────
-export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }: ChatBoxProps) {
-    const { refreshTokens } = useAI()
+export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, bookingId }: ChatBoxProps) {
+    const { refreshTokens, tokensRemaining } = useAI()
     const [inputValue, setInputValue] = useState('')
     const [attachments, setAttachments] = useState<Attachment[]>([])
+    const [sessionUserId, setSessionUserId] = useState<string | null>(null)
+    const [sessionClinicId, setSessionClinicId] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     const [sessionId] = useState(() => `session-${Math.random().toString(36).slice(2)}`)
     const { sessions, saveSession } = useHistory(sessionId)
+
 
     // Android keyboard jitter fix — visualViewport API
     useEffect(() => {
@@ -160,9 +226,27 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     })
 
+    // ── Look up chat_session when bookingId is provided ──
+    useEffect(() => {
+        if (!bookingId) { setSessionUserId(null); setSessionClinicId(null); return }
+        const lookup = async () => {
+            const { data } = await supabase
+                .from('chat_sessions')
+                .select('user_id, clinic_id')
+                .eq('booking_id', bookingId)
+                .maybeSingle()
+            if (data?.user_id) setSessionUserId(data.user_id)
+            if (data?.clinic_id) setSessionClinicId(data.clinic_id)
+        }
+        lookup()
+    }, [bookingId])
+
+    // Effective user for the API route (booking context overrides prop)
+    const effectiveUserId = sessionUserId ?? userId
+
     const { messages, sendMessage, status, setMessages } = useChat({
         transport: new DefaultChatTransport({
-            body: { id: clinicId },
+            body: { clinicId: clinicId || sessionClinicId, userId: effectiveUserId, bookingId },
         }),
         onFinish: async ({ message }) => {
             // Token deduction (local UI update only, API route handles DB sync)
@@ -170,13 +254,11 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
             const used = usage?.totalTokens ?? 0
             if (used && clinicId) {
                 onTokensUsed?.(used)
-                // We let the API route handle the actual decrement_clinic_tokens RPC
-                // to prevent double-counting.
             }
 
             // Local and Supabase sync handled via useHistory hook
-            saveSession([...messages, message], { userId, clinicId })
-            
+            saveSession([...messages, message], { userId: effectiveUserId, clinicId: clinicId || sessionClinicId })
+
             // Refresh token state to update UI in sidebar / tokens page automatically
             if (used && clinicId) {
                 refreshTokens()
@@ -185,14 +267,49 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
         onError: (err) => console.error('[ChatBox] error:', err),
     })
 
-    // Load history from Supabase when clinicId changes
+    // ── Load history ──
     useEffect(() => {
-        if (!clinicId) return
+        const targetClinicId = clinicId || sessionClinicId
+        if (!targetClinicId) return
+
+        // Booking context → load shared chat_history (both user & clinic messages)
+        if (sessionUserId) {
+            const fetchSharedHistory = async () => {
+                const { data, error } = await supabase
+                    .from('chat_history')
+                    .select('message, response, created_at')
+                    .eq('user_id', sessionUserId)
+                    .eq('clinic_id', targetClinicId)
+                    .order('created_at', { ascending: true })
+                    .limit(50)
+
+                if (!error && data) {
+                    const uiMessages: UIMessage[] = []
+                    data.forEach((row, idx) => {
+                        uiMessages.push({
+                            id: `hist-user-${idx}`,
+                            role: 'user' as const,
+                            parts: [{ type: 'text', text: row.message }],
+                        })
+                        uiMessages.push({
+                            id: `hist-ai-${idx}`,
+                            role: 'assistant' as const,
+                            parts: [{ type: 'text', text: row.response }],
+                        })
+                    })
+                    setMessages(uiMessages)
+                }
+            }
+            fetchSharedHistory()
+            return
+        }
+
+        // Normal clinic dashboard → load from messages table
         const fetchHistory = async () => {
             const { data, error } = await supabase
                 .from('messages')
                 .select('role, content, created_at')
-                .eq('clinic_id', clinicId)
+                .eq('clinic_id', targetClinicId)
                 .order('created_at', { ascending: true })
                 .limit(20)
 
@@ -206,20 +323,20 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
             }
         }
         fetchHistory()
-    }, [clinicId, setMessages])
+    }, [clinicId, sessionClinicId, sessionUserId, setMessages])
 
     // ── Submit ──
     const handleSend = () => {
         const text = inputValue.trim()
         if (!text && attachments.length === 0) return
-        
+
         const attachFiles = attachments.map(a => a.file)
-        
-        sendMessage({ 
+
+        sendMessage({
             text: text || 'Gửi tệp đính kèm',
             ...(attachFiles.length > 0 && { experimental_attachments: attachFiles })
         })
-        
+
         setInputValue('')
         setAttachments([])
     }
@@ -306,11 +423,10 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
                         transition={{ duration: 0.25 }}
                         className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                        <div className={`max-w-[82%] rounded-2xl px-4 py-3 ${
-                            message.role === 'user'
-                                ? 'rounded-tr-sm bg-[#1DA1F2] text-white'
-                                : 'rounded-tl-sm bg-[#111] border border-[#1f2937] text-gray-200'
-                        }`}>
+                        <div className={`max-w-[82%] rounded-2xl px-4 py-3 ${message.role === 'user'
+                            ? 'rounded-tr-sm bg-[#1DA1F2] text-white'
+                            : 'rounded-tl-sm bg-[#111] border border-[#1f2937] text-gray-200'
+                            }`}>
                             {message.parts && message.parts.length > 0
                                 ? message.parts.map((part, idx) => {
                                     if (part.type === 'text') {
@@ -339,21 +455,22 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder }:
                                 : <ParsedContent text={getMessageText(message) || '...'} />
                             }
 
-                            {/* Streaming indicator */}
-                            {isBusy && msgIdx === messages.length - 1 && message.role === 'assistant' && (
-                                <span className="inline-flex gap-1 ml-1 mt-1">
-                                    {[0, 1, 2].map((i) => (
-                                        <span key={i} className="h-1.5 w-1.5 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                                    ))}
-                                </span>
-                            )}
-
                             <div className={`mt-1 text-[10px] ${message.role === 'user' ? 'text-sky-200' : 'text-gray-600'}`}>
                                 {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                         </div>
                     </motion.div>
                 ))}
+
+                {/* Live Typing Indicator */}
+                {isBusy && messages[messages.length - 1]?.role === 'user' && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                    >
+                        <TypingIndicator />
+                    </motion.div>
+                )}
 
                 <div ref={messagesEndRef} />
             </div>
