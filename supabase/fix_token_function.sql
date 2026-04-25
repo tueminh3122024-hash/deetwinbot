@@ -1,9 +1,9 @@
--- Dọn dẹp các hàm cũ để tránh lỗi "Overloading" (Candidate function mismatch)
+-- 1. XÓA SẠCH CÁC HÀM CŨ (DỌN DẸP RÁC ĐỂ TRÁNH LỖI OVERLOADING)
 DROP FUNCTION IF EXISTS decrement_clinic_tokens(UUID, INT);
 DROP FUNCTION IF EXISTS decrement_clinic_tokens(UUID, NUMERIC);
 DROP FUNCTION IF EXISTS decrement_clinic_tokens(UUID, NUMERIC, UUID, NUMERIC);
 
--- Hàm trừ Token chuẩn hóa mới
+-- 2. TẠO LẠI HÀM TRỪ TIỀN CHUẨN (HỖ TRỢ CẢ 2 CÁCH GỌI THAM SỐ)
 CREATE OR REPLACE FUNCTION decrement_clinic_tokens(
     p_clinic_id UUID DEFAULT NULL,
     p_amount    NUMERIC DEFAULT NULL,
@@ -29,16 +29,23 @@ BEGIN
 END;
 $$;
 
--- Trigger tự động trừ token khi có tin nhắn mới
+-- 3. HÀM TRIGGER (XỬ LÝ TỰ ĐỘNG KHI CÓ TIN NHẮN MỚI)
 CREATE OR REPLACE FUNCTION handle_chat_token_deduction()
 RETURNS TRIGGER AS $$
 DECLARE
     current_rate NUMERIC;
+    raw_setting TEXT;
 BEGIN
-    SELECT COALESCE((value->>0)::NUMERIC, 5) INTO current_rate 
+    -- Lấy giá trị thô từ system_settings
+    SELECT value::TEXT INTO raw_setting 
     FROM system_settings 
     WHERE key = 'token_rate';
 
+    -- Làm sạch dữ liệu: Xóa dấu ngoặc kép " (nếu có do kiểu JSONB) và ép kiểu về Numeric
+    -- Nếu không tìm thấy, mặc định tỷ lệ là 5 tin nhắn = 1 token
+    current_rate := COALESCE(REPLACE(raw_setting, '"', '')::NUMERIC, 5);
+
+    -- Thực hiện trừ token của clinic
     IF NEW.clinic_id IS NOT NULL THEN
         UPDATE clinics
         SET token_balance = GREATEST(0, COALESCE(token_balance, 0) - (1.0 / current_rate))
@@ -49,6 +56,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 4. GẮN TRIGGER VÀO BẢNG CHAT_HISTORY
 DROP TRIGGER IF EXISTS trigger_deduct_tokens ON chat_history;
 CREATE TRIGGER trigger_deduct_tokens
 AFTER INSERT ON chat_history

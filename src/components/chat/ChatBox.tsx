@@ -394,8 +394,12 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, b
                     <div className="px-2 pt-6 space-y-4">
                         {/* Welcome greeting */}
                         <div className="flex flex-col items-center gap-3 text-center pb-2">
-                            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-[#1DA1F2] to-teal-500 flex items-center justify-center shadow-xl shadow-sky-500/10">
-                                <span className="text-xl">🧬</span>
+                            <div className="h-14 w-14 rounded-full overflow-hidden border border-[#1f2937] shadow-xl shadow-sky-500/10 bg-black">
+                                <img 
+                                    src="https://deetwinapp.vercel.app/assets/public/avatar.995cc35baa763d8aaef9a5fe3954fe7d.gif" 
+                                    alt="DeeTwin Welcome Avatar"
+                                    className="h-full w-full object-cover"
+                                />
                             </div>
                             <div>
                                 <p className="text-white text-base font-semibold">Xin chào! Tôi là DeeTwin</p>

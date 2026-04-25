@@ -31,7 +31,13 @@ function ClinicChatInner() {
                             <ArrowLeft size={15} className="text-gray-300" />
                         </button>
                     ) : (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1DA1F2] to-teal-500 shadow-md" />
+                        <div className="h-8 w-8 rounded-full overflow-hidden border border-[#1f2937] shadow-md bg-black">
+                            <img 
+                                src="https://deetwinapp.vercel.app/assets/public/avatar.995cc35baa763d8aaef9a5fe3954fe7d.gif" 
+                                alt="DeeTwin Avatar"
+                                className="h-full w-full object-cover"
+                            />
+                        </div>
                     )}
                     <div>
                         <p className="text-white text-sm font-bold tracking-tight leading-none">
