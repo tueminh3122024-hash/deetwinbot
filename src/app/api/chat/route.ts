@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         // Convert UI messages → model messages
         const modelMessages = messages.map(toModelMessage)
 
-        // Call Gemini via streamText
+        // Call Gemini via streamText (Use Gemini 3 Flash Preview as requested)
         const result = streamText({
             model: google('gemini-3-flash-preview'),
             system: fullSystemPrompt,

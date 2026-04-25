@@ -6,6 +6,7 @@ import HeroSection from './HeroSection'
 import ServiceCard from './ServiceCard'
 import MSICircle from './MSICircle'
 import AIWaveform from './AIWaveform'
+import LiveVoiceManager from './LiveVoiceManager'
 import BamaBookingModal from '@/components/chat/BamaBookingModal'
 import { Activity, Shield, Zap, MessageSquare } from 'lucide-react'
 
@@ -17,6 +18,8 @@ interface LandingClientProps {
 
 export default function LandingClient({ clinic, services, userId }: LandingClientProps) {
     const [bookingOpen, setBookingOpen] = useState(false)
+    const [liveState, setLiveState] = useState<'idle' | 'connecting' | 'active' | 'error'>('idle')
+    const [liveVolume, setLiveVolume] = useState(0)
 
     return (
         <div className="min-h-screen bg-[#050505] text-white selection:bg-[#00D1FF]/30">
@@ -112,37 +115,12 @@ export default function LandingClient({ clinic, services, userId }: LandingClien
                 </div>
             </section>
 
-            {/* AI Live Mode Feature */}
+            {/* AI Live Mode Feature - Temporarily Hidden until API is stable */}
+            {/* 
             <section className="py-20 px-6 bg-[#0a0a0a]">
-                <div className="max-w-5xl mx-auto rounded-[3rem] bg-gradient-to-b from-[#111] to-black border border-white/5 p-8 md:p-16 overflow-hidden relative">
-                    {/* Background Light */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#00D1FF]/5 blur-[80px]" />
-                    
-                    <div className="text-center relative z-10">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D1FF]/10 border border-[#00D1FF]/20 text-[#00D1FF] text-xs font-bold uppercase tracking-widest mb-8">
-                            <Zap size={14} />
-                            Gemini 3 Flash Live
-                        </div>
-                        <h2 className="text-3xl md:text-5xl font-bold mb-8 leading-tight">
-                            Tư vấn trực tiếp với <br /> Trợ lý ảo AI
-                        </h2>
-                        
-                        <div className="mb-12">
-                            <AIWaveform />
-                        </div>
-
-                        <p className="text-gray-400 max-w-2xl mx-auto mb-10 text-lg">
-                            Công nghệ AI mới nhất cho phép bạn trò chuyện bằng giọng nói, 
-                            nhận phản hồi tức thì về kết quả xét nghiệm và lời khuyên sức khỏe cá nhân hóa.
-                        </p>
-
-                        <button className="px-10 py-4 rounded-full bg-white text-black font-bold hover:bg-[#00D1FF] transition-colors flex items-center gap-3 mx-auto">
-                            <MessageSquare size={20} />
-                            Bắt đầu Trò chuyện
-                        </button>
-                    </div>
-                </div>
+                ... (code ẩn đi) ...
             </section>
+            */}
 
             {/* Footer */}
             <footer className="py-12 border-t border-white/5 text-center text-gray-500 text-sm">
