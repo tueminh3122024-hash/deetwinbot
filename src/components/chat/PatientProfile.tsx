@@ -5,8 +5,11 @@ import { supabase } from '@/lib/supabase/client'
 import {
     Plus, Pencil, Trash2, Save, X, Loader2, FileText, Image,
     Stethoscope, FlaskConical, Pill, MessageSquare, CalendarDays,
-    ChevronDown, ChevronUp
+    ChevronDown, ChevronUp, Mail, Phone
 } from 'lucide-react'
+
+/* ─── Types ─── */
+import { getPatientProfile, updatePatientBasicInfo, updatePatientProfileData } from '@/lib/actions/patient'
 
 /* ─── Types ─── */
 interface MediaItem {
@@ -70,6 +73,10 @@ const CARD_COLORS: Record<DataCard['type'], string> = {
 /* ─── Component ─── */
 export default function PatientProfile({ userId, clinicId, role }: PatientProfileProps) {
     const [profile, setProfile] = useState<PatientProfileData | null>(null)
+    const [patientName, setPatientName] = useState('')
+    const [patientEmail, setPatientEmail] = useState('')
+    const [patientPhone, setPatientPhone] = useState('')
+    const [isEditingInfo, setIsEditingInfo] = useState(false)
     const [loading, setLoading] = useState(true)
     const [editing, setEditing] = useState<string | null>(null) // card id | 'new'
     const [editType, setEditType] = useState<DataCard['type']>('note')
@@ -80,15 +87,14 @@ export default function PatientProfile({ userId, clinicId, role }: PatientProfil
 
     /* ── Load / create profile ── */
     const loadProfile = useCallback(async () => {
-        const { data } = await supabase
-            .from('patient_profiles')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('clinic_id', clinicId)
-            .maybeSingle()
+        setLoading(true)
+        const res = await getPatientProfile(userId, clinicId)
 
-        if (data) {
-            setProfile(data as PatientProfileData)
+        if (res.success) {
+            if (res.data) setProfile(res.data as PatientProfileData)
+            setPatientName((res as any).fullName || '')
+            setPatientEmail((res as any).patientEmail || '')
+            setPatientPhone((res as any).patientPhone || '')
         }
         setLoading(false)
     }, [userId, clinicId])
@@ -97,30 +103,28 @@ export default function PatientProfile({ userId, clinicId, role }: PatientProfil
         loadProfile()
     }, [loadProfile])
 
+    /* ── Save patient info ── */
+    const handleSaveInfo = async () => {
+        const res = await updatePatientBasicInfo(userId, {
+            fullName: patientName.trim(),
+            email: patientEmail.trim(),
+            phone: patientPhone.trim()
+        })
+        if (res.success) {
+            setIsEditingInfo(false)
+        } else {
+            alert('Lỗi khi cập nhật thông tin: ' + res.error)
+        }
+    }
+
     /* ── Save profile (upsert) ── */
     const saveProfile = async (cards: DataCard[]) => {
-        const payload = {
-            user_id: userId,
-            clinic_id: clinicId,
-            data_cards: cards,
-            updated_at: new Date().toISOString(),
-        }
-
-        if (profile?.id) {
-            const { data } = await supabase
-                .from('patient_profiles')
-                .update(payload)
-                .eq('id', profile.id)
-                .select()
-                .single()
-            if (data) setProfile(data as PatientProfileData)
+        const res = await updatePatientProfileData(userId, clinicId, cards)
+        if (res.success) {
+            // Reload local state
+            setProfile(prev => prev ? { ...prev, data_cards: cards } : null)
         } else {
-            const { data } = await supabase
-                .from('patient_profiles')
-                .insert({ ...payload, created_at: new Date().toISOString() })
-                .select()
-                .single()
-            if (data) setProfile(data as PatientProfileData)
+            alert('Lỗi khi lưu hồ sơ: ' + res.error)
         }
     }
 
@@ -218,6 +222,95 @@ export default function PatientProfile({ userId, clinicId, role }: PatientProfil
 
     return (
         <div className="space-y-3">
+            {/* Patient Info Header */}
+            <div className="bg-[#111] border border-[#1f2937] rounded-2xl p-4 mb-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#1DA1F2]/20 to-teal-500/20 border border-[#1DA1F2]/20 flex items-center justify-center">
+                            <span className="text-[#1DA1F2] text-sm font-bold">
+                                {patientName?.[0]?.toUpperCase() || '?'}
+                            </span>
+                        </div>
+                        <div>
+                            {isEditingInfo ? (
+                                <div className="space-y-2">
+                                    {/* Name input */}
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            value={patientName}
+                                            onChange={(e) => setPatientName(e.target.value)}
+                                            placeholder="Tên bệnh nhân"
+                                            className="bg-[#0d0d0d] border border-[#1DA1F2]/30 rounded-lg px-2 py-1 text-sm text-white outline-none w-full"
+                                            autoFocus
+                                        />
+                                        <button 
+                                            onClick={handleSaveInfo}
+                                            className="p-1.5 rounded-lg bg-[#1DA1F2] text-white hover:bg-sky-400 transition-colors"
+                                        >
+                                            <Save size={14} />
+                                        </button>
+                                        <button 
+                                            onClick={() => setIsEditingInfo(false)}
+                                            className="p-1.5 rounded-lg text-gray-500 hover:text-white"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                    {/* Contact inputs */}
+                                    <div className="grid grid-cols-1 gap-1.5">
+                                        <div className="flex items-center gap-1.5 bg-[#0d0d0d] border border-gray-800 rounded-lg px-2 py-1">
+                                            <Mail size={10} className="text-gray-600" />
+                                            <input
+                                                value={patientEmail}
+                                                onChange={(e) => setPatientEmail(e.target.value)}
+                                                placeholder="Email"
+                                                className="bg-transparent border-none text-[11px] text-gray-300 outline-none w-full"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-1.5 bg-[#0d0d0d] border border-gray-800 rounded-lg px-2 py-1">
+                                            <Phone size={10} className="text-gray-600" />
+                                            <input
+                                                value={patientPhone}
+                                                onChange={(e) => setPatientPhone(e.target.value)}
+                                                placeholder="Số điện thoại"
+                                                className="bg-transparent border-none text-[11px] text-gray-300 outline-none w-full"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 group">
+                                    <h3 className="text-white font-bold">{patientName || 'Không rõ tên'}</h3>
+                                    <button 
+                                        onClick={() => setIsEditingInfo(true)}
+                                        className="p-1 rounded-lg text-gray-600 hover:text-[#1DA1F2] hover:bg-[#1DA1F2]/10 opacity-0 group-hover:opacity-100 transition-all"
+                                    >
+                                        <Pencil size={12} />
+                                    </button>
+                                </div>
+                            )}
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest mt-0.5">Mã: {userId.slice(0, 8)}</p>
+                            {!isEditingInfo && (
+                                <div className="flex flex-col gap-1 mt-2">
+                                    {patientEmail && (
+                                        <div className="flex items-center gap-1.5">
+                                            <Mail size={10} className="text-[#1DA1F2]/60" />
+                                            <span className="text-gray-400 text-[11px]">{patientEmail}</span>
+                                        </div>
+                                    )}
+                                    {patientPhone && (
+                                        <div className="flex items-center gap-1.5">
+                                            <Phone size={10} className="text-[#1DA1F2]/60" />
+                                            <span className="text-gray-400 text-[11px]">{patientPhone}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

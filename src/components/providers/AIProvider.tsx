@@ -53,20 +53,61 @@ export function AIProvider({ children }: { children: ReactNode }) {
         }
     }, [])
 
-    // Fetch clinics list from Supabase
+    // Fetch clinics list from Supabase based on logged-in user
     useEffect(() => {
         const loadClinics = async () => {
-            const { data, error } = await supabase
+            const { data: { session } } = await supabase.auth.getSession()
+            const user = session?.user
+            
+            if (!user) {
+                setAvailableClinics([])
+                setCurrentClinicId(null)
+                return
+            }
+
+            // Check role from profiles
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single()
+
+            const role = profile?.role || 'user'
+            setUserRole(role)
+
+            if (role === 'user') {
+                // Normal users don't manage clinics in dashboard
+                setAvailableClinics([])
+                setCurrentClinicId(null)
+                return
+            }
+
+            let query = supabase
                 .from('clinics')
                 .select('id, name')
                 .eq('status', 'active')
                 .order('name')
+            
+            // If clinic, they only see their own clinic (clinic.id === user.id OR clinic.email === user.email)
+            if (role === 'clinic') {
+                if (user.email) {
+                    query = query.or(`id.eq.${user.id},email.eq.${user.email}`)
+                } else {
+                    query = query.eq('id', user.id)
+                }
+            }
+            // If admin, they see all active clinics
 
-            if (!error && data) {
+            const { data, error } = await query
+
+            if (!error && data && data.length > 0) {
                 setAvailableClinics(data)
-                if (data.length > 0 && !currentClinicId) {
+                if (!currentClinicId || !data.find(c => c.id === currentClinicId)) {
                     setCurrentClinicId(data[0].id)
                 }
+            } else {
+                setAvailableClinics([])
+                setCurrentClinicId(null)
             }
         }
         loadClinics()

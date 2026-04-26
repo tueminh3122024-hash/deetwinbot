@@ -108,19 +108,32 @@ export default function CompleteExamModal({ open, onClose, booking, onSuccess }:
                 setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, uploading: false, uploadedUrl: url } : a))
             }
 
-            // 2. Get chat history context
-            const { data: history } = await supabase
-                .from('chat_history')
-                .select('message, response')
-                .eq('user_id', booking.user_id)
-                .eq('clinic_id', booking.clinic_id)
-                .order('created_at', { ascending: false })
-                .limit(10)
+            // 2. Get chat history context and user info
+            const [historyRes, profileRes] = await Promise.all([
+                supabase
+                    .from('chat_history')
+                    .select('message, response')
+                    .eq('user_id', booking.user_id)
+                    .eq('clinic_id', booking.clinic_id)
+                    .order('created_at', { ascending: false })
+                    .limit(10),
+                supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', booking.user_id)
+                    .single()
+            ])
 
+            const history = historyRes.data
+            const patientProfile = profileRes.data
+            
             const chatText = history?.map(h => `User: ${h.message}\nAI: ${h.response}`).join('\n') || ''
+            const userInfo = patientProfile 
+                ? `Tên: ${patientProfile.full_name}, Email: ${patientProfile.email}, SĐT: ${patientProfile.phone}, Địa chỉ: ${patientProfile.address}` 
+                : 'Không có thông tin profile'
 
             // 3. AI Summarization
-            const aiResult = await generateMedicalSummary(chatText, notes)
+            const aiResult = await generateMedicalSummary(chatText, notes, '', userInfo)
             if (!aiResult.success) throw new Error(aiResult.error)
 
             setStatus('saving')

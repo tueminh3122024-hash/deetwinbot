@@ -61,9 +61,21 @@ export default function ClinicSettingsPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
+    const [noClinic, setNoClinic] = useState(false)
 
     useEffect(() => {
-        if (!currentClinicId) return
+        if (!currentClinicId) {
+            // Give AIProvider a moment to set it
+            const timer = setTimeout(() => {
+                if (!currentClinicId) {
+                    setNoClinic(true)
+                    setLoading(false)
+                }
+            }, 1500)
+            return () => clearTimeout(timer)
+        }
+        
+        setNoClinic(false)
         supabase
             .from('clinics')
             .select('name,specialty,description,working_hours,doctor_name,tax_id,address,map_url')
@@ -105,6 +117,16 @@ export default function ClinicSettingsPage() {
     if (loading) return (
         <div className="flex h-full items-center justify-center">
             <Loader2 size={24} className="text-[#1DA1F2] animate-spin" />
+        </div>
+    )
+
+    if (noClinic) return (
+        <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+            <Building2 size={48} className="text-gray-700 mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">Chưa có phòng mạch</h2>
+            <p className="text-gray-400 max-w-sm">
+                Tài khoản của bạn chưa được liên kết với phòng mạch nào. Vui lòng liên hệ Admin để được cấp quyền hoặc tạo phòng mạch mới.
+            </p>
         </div>
     )
 

@@ -55,20 +55,24 @@ export default function LiveVoiceManager({ onStateChange, onVolumeChange }: Live
     } else {
       try {
         onStateChange?.('connecting');
-        console.log('[LiveVoice] Fetching signed URL...');
+        console.log('[LiveVoice] Requesting signed URL...');
         
-        // Fetch signed URL from server
-        const signedUrl = await getElevenLabsSignedUrl();
-        console.log('[LiveVoice] Signed URL fetched successfully');
+        const res = await getElevenLabsSignedUrl();
+        
+        if (!res.success || !res.signedUrl) {
+          throw new Error(res.error || 'Server returned empty signed URL');
+        }
+
+        console.log('[LiveVoice] Signed URL received, initializing session...');
         
         await startSession({
-          signedUrl: signedUrl,
-          // Force websocket as WebRTC seems to be failing in this environment
-          connectionType: 'websocket', 
+          signedUrl: res.signedUrl,
         });
-        console.log('[LiveVoice] Session start called');
-      } catch (err) {
-        console.error("[LiveVoice] Failed to start session:", err);
+
+        console.log('[LiveVoice] startSession success');
+      } catch (err: any) {
+        console.error("[LiveVoice] Connection failed:", err);
+        alert('Lỗi kết nối Live AI: ' + (err.message || 'Vui lòng kiểm tra lại cấu hình ElevenLabs trên Vercel'));
         onStateChange?.('error');
       }
     }

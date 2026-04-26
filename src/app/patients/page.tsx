@@ -5,13 +5,16 @@ import { useAI } from '@/components/providers/AIProvider'
 import { supabase } from '@/lib/supabase/client'
 import { Users, Search, Phone, Mail, Loader2, UserCircle, CalendarDays } from 'lucide-react'
 
+import { getClinicPatients } from '@/lib/actions/patient'
+import PatientProfile from '@/components/chat/PatientProfile'
+
 interface Patient {
     id: string
     full_name: string | null
     email: string | null
     phone: string | null
     created_at: string
-    age: number | null
+    user_id: string
 }
 
 export default function ClinicPatientsPage() {
@@ -20,38 +23,26 @@ export default function ClinicPatientsPage() {
     const [filtered, setFiltered] = useState<Patient[]>([])
     const [search, setSearch] = useState('')
     const [loading, setLoading] = useState(true)
+    const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
 
     useEffect(() => {
         if (!currentClinicId) return
-        // Load patients who have bookings with this clinic
-        supabase
-            .from('bookings')
-            .select('email, full_name, phone, created_at')
-            .eq('clinic_id', currentClinicId)
-            .order('created_at', { ascending: false })
-            .then(({ data }) => {
-                if (!data) { setLoading(false); return }
-                // Deduplicate by email
-                const seen = new Set<string>()
-                const unique = data.reduce<Patient[]>((acc, b) => {
-                    const key = b.email || b.full_name || b.created_at
-                    if (!seen.has(key)) {
-                        seen.add(key)
-                        acc.push({
-                            id: key,
-                            full_name: b.full_name,
-                            email: b.email,
-                            phone: b.phone,
-                            created_at: b.created_at,
-                            age: null,
-                        })
-                    }
-                    return acc
-                }, [])
-                setPatients(unique)
-                setFiltered(unique)
-                setLoading(false)
-            })
+        
+        const fetchPatients = async () => {
+            setLoading(true)
+            const res = await getClinicPatients(currentClinicId)
+            
+            if (res.success && res.data) {
+                setPatients(res.data as any)
+                setFiltered(res.data as any)
+            } else if (res.error) {
+                console.error('[patients/page] Fetch error:', res.error)
+            }
+            
+            setLoading(false)
+        }
+
+        fetchPatients()
     }, [currentClinicId])
 
     useEffect(() => {
@@ -63,6 +54,32 @@ export default function ClinicPatientsPage() {
             p.phone?.includes(q)
         ))
     }, [search, patients])
+
+    if (selectedPatient) {
+        return (
+            <div className="flex flex-col h-full bg-black">
+                <header className="sticky top-0 z-40 px-4 py-3 bg-black/80 backdrop-blur-lg border-b border-[#1f2937] flex items-center gap-3">
+                    <button 
+                        onClick={() => setSelectedPatient(null)}
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-all"
+                    >
+                        <UserCircle size={20} />
+                    </button>
+                    <div>
+                        <h1 className="text-white text-sm font-bold truncate">{selectedPatient.full_name}</h1>
+                        <p className="text-gray-500 text-[10px] uppercase tracking-wider">{selectedPatient.email || 'Hồ sơ bệnh nhân'}</p>
+                    </div>
+                </header>
+                <div className="flex-1 overflow-y-auto p-4 pb-20">
+                    <PatientProfile 
+                        userId={selectedPatient.user_id} 
+                        clinicId={currentClinicId!} 
+                        role="clinic" 
+                    />
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="flex flex-col h-full">
@@ -93,20 +110,24 @@ export default function ClinicPatientsPage() {
                     <div className="flex flex-col items-center justify-center pt-20 gap-3 text-center">
                         <UserCircle size={40} className="text-gray-700" />
                         <p className="text-gray-500 text-sm">Chưa có bệnh nhân nào</p>
-                        <p className="text-gray-700 text-xs">Bệnh nhân sẽ hiển thị khi họ đặt lịch qua form</p>
+                        <p className="text-gray-700 text-xs">Bệnh nhân sẽ hiển thị sau khi bác sĩ hoàn tất quy trình khám</p>
                     </div>
                 )}
                 {!loading && filtered.length > 0 && (
                     <div className="space-y-2.5">
                         {filtered.map((p) => (
-                            <div key={p.id} className="flex items-start gap-3 bg-[#111] border border-[#1f2937] rounded-2xl p-3.5">
+                            <div 
+                                key={p.id} 
+                                onClick={() => setSelectedPatient(p)}
+                                className="flex items-start gap-3 bg-[#111] border border-[#1f2937] rounded-2xl p-3.5 hover:bg-[#1a1a1a] transition-all cursor-pointer group"
+                            >
                                 <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#1DA1F2]/20 to-teal-500/20 border border-[#1DA1F2]/20 flex items-center justify-center flex-shrink-0">
                                     <span className="text-[#1DA1F2] text-xs font-bold">
                                         {p.full_name?.[0]?.toUpperCase() || '?'}
                                     </span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-white text-sm font-semibold truncate">{p.full_name || 'Không rõ tên'}</p>
+                                    <p className="text-white text-sm font-semibold truncate group-hover:text-[#1DA1F2] transition-colors">{p.full_name || 'Không rõ tên'}</p>
                                     {p.email && (
                                         <div className="flex items-center gap-1.5 mt-1">
                                             <Mail size={11} className="text-gray-600 flex-shrink-0" />
@@ -120,9 +141,14 @@ export default function ClinicPatientsPage() {
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-1 text-gray-700 text-[10px] flex-shrink-0">
-                                    <CalendarDays size={10} />
-                                    {new Date(p.created_at).toLocaleDateString('vi-VN')}
+                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                    <div className="flex items-center gap-1 text-gray-700 text-[10px]">
+                                        <CalendarDays size={10} />
+                                        {new Date(p.created_at).toLocaleDateString('vi-VN')}
+                                    </div>
+                                    <span className="text-[9px] bg-[#1DA1F2]/10 text-[#1DA1F2] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">
+                                        Hồ sơ
+                                    </span>
                                 </div>
                             </div>
                         ))}

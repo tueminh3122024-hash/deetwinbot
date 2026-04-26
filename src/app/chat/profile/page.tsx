@@ -14,6 +14,8 @@ interface Profile {
     avatar_url: string
 }
 
+import { updatePatientBasicInfo } from '@/lib/actions/patient'
+
 export default function UserProfilePage() {
     const router = useRouter()
     const [supaUser, setSupaUser] = useState<SupaUser | null>(null)
@@ -53,18 +55,19 @@ export default function UserProfilePage() {
         if (!supaUser) return
         setSaving(true)
 
-        await supabase.from('profiles').upsert({
-            id: supaUser.id,
-            full_name: form.full_name,
-            age: form.age ? parseInt(form.age) : null,
+        const res = await updatePatientBasicInfo(supaUser.id, {
+            fullName: form.full_name,
             phone: form.phone,
-            avatar_url: form.avatar_url,
-            updated_at: new Date().toISOString(),
-        }, { onConflict: 'id' })
+            age: form.age ? parseInt(form.age) : undefined
+        })
 
         setSaving(false)
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
+        if (res.success) {
+            setSaved(true)
+            setTimeout(() => setSaved(false), 3000)
+        } else {
+            alert('Lỗi khi lưu: ' + res.error)
+        }
     }
 
     const field = (

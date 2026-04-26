@@ -13,7 +13,8 @@ const google = createGoogleGenerativeAI({
 export async function generateMedicalSummary(
     chatHistory: string,
     clinicNotes: string,
-    ocrText: string = ''
+    ocrText: string = '',
+    userInfo: string = ''
 ) {
     try {
         const { text } = await generateText({
@@ -32,6 +33,9 @@ export async function generateMedicalSummary(
             
             Tông giọng: Chuyên nghiệp, khách quan, đi thẳng vào vấn đề.`,
             prompt: `
+            THÔNG TIN BỆNH NHÂN:
+            ${userInfo}
+
             DỮ LIỆU TRÒ CHUYỆN:
             ${chatHistory}
             

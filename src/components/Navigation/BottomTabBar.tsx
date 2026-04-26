@@ -26,10 +26,10 @@ const clinicTabs: Tab[] = [
 
 
 const userTabs: Tab[] = [
-    { id: 'chat', label: 'Chat', icon: MessageSquare, href: '/chat' },
+    { id: 'chat', label: 'MAMA', icon: Zap, href: '/chat' },
     { id: 'history', label: 'Lịch sử', icon: History, href: '/chat/history' },
     { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, href: '/chat/appointments' },
-    { id: 'profile', label: 'Hồ sơ', icon: UserCircle, href: '/chat/profile' },
+    { id: 'profile', label: 'Cài đặt', icon: Settings, href: '/chat/profile' },
 ]
 
 function NavItem({ tab, isActive, onClick, collapsed }: {

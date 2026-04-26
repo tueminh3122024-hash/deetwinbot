@@ -1,9 +1,12 @@
-import ChatLayoutComponent from '@/components/layout/ChatLayout'
+import { AIProvider } from '@/components/providers/AIProvider'
+import AppShell from '@/components/Navigation/AppShell'
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
     return (
-        <ChatLayoutComponent>
-            {children}
-        </ChatLayoutComponent>
+        <AIProvider>
+            <AppShell role="user">
+                {children}
+            </AppShell>
+        </AIProvider>
     )
 }

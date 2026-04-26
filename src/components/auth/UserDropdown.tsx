@@ -5,11 +5,13 @@ import { LogOut, User, Settings, CreditCard } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase/client'
+import { useAI } from '@/components/providers/AIProvider'
 
 /**
  * UserDropdown component for authentication and profile management.
  */
 export function UserDropdown() {
+    const { availableClinics } = useAI()
     const [user, setUser] = useState<any>(null)
     const [isOpen, setIsOpen] = useState(false)
 
@@ -38,7 +40,7 @@ export function UserDropdown() {
                 variant="outline" 
                 size="sm" 
                 className="border-[#1f2937] text-white hover:bg-gray-800 rounded-full h-9 px-4 text-xs font-semibold"
-                onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}
+                onClick={() => window.location.href = '/login'}
             >
                 Đăng nhập
             </Button>
@@ -70,18 +72,27 @@ export function UserDropdown() {
                         </div>
                         
                         <div className="space-y-1">
-                            <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
-                                <User size={16} className="mr-3" />
-                                Hồ sơ bác sĩ
-                            </button>
-                            <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
-                                <CreditCard size={16} className="mr-3" />
-                                Gói dịch vụ
-                            </button>
-                            <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
-                                <Settings size={16} className="mr-3" />
-                                Cài đặt Clinic
-                            </button>
+                            {availableClinics.length > 0 ? (
+                                <>
+                                    <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
+                                        <User size={16} className="mr-3" />
+                                        Hồ sơ bác sĩ
+                                    </button>
+                                    <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
+                                        <CreditCard size={16} className="mr-3" />
+                                        Gói dịch vụ
+                                    </button>
+                                    <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors">
+                                        <Settings size={16} className="mr-3" />
+                                        Cài đặt Clinic
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors" onClick={() => window.location.href = '/chat/profile'}>
+                                    <Settings size={16} className="mr-3" />
+                                    Cài đặt tài khoản
+                                </button>
+                            )}
                         </div>
                         
                         <div className="mt-2 pt-2 border-t border-gray-800">
