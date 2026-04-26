@@ -53,6 +53,19 @@ function ClinicChatInner() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <button 
+                        onClick={async () => {
+                            if (!currentClinicId) return;
+                            const { requestTopUp } = await import('@/lib/actions/admin');
+                            const res = await requestTopUp(currentClinicId);
+                            if (res.success) alert('Đã gửi yêu cầu nạp thêm Token tới Admin!');
+                            else alert('Lỗi: ' + res.error);
+                        }}
+                        className="text-[10px] font-bold text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 px-2 py-1 rounded-md hover:bg-yellow-500/20 transition-all"
+                        title="Yêu cầu nạp Token"
+                    >
+                        NẠP THÊM
+                    </button>
                     <Badge className="bg-[#1DA1F2]/10 text-[#1DA1F2] border-none rounded-full px-2.5 py-1 flex items-center gap-1 text-[11px]">
                         <Coins size={10} />
                         <span className="tabular-nums font-semibold">{tokensRemaining.toLocaleString()}</span>
@@ -64,6 +77,7 @@ function ClinicChatInner() {
             {/* ── Chat ── */}
             <div className="flex-1 overflow-hidden">
                 <ChatBox
+                    key={currentClinicId || 'default'}
                     clinicId={currentClinicId}
                     onTokensUsed={handleTokensUsed}
                     bookingId={bookingId}

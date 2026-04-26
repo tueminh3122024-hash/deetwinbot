@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { useAI } from '@/components/providers/AIProvider'
 import { supabase } from '@/lib/supabase/client'
+import ConsultationHistory from '@/components/clinic/ConsultationHistory'
 
 interface ChatLayoutProps {
     children: React.ReactNode
@@ -16,6 +17,7 @@ interface ChatLayoutProps {
 export default function ChatLayout({ children }: ChatLayoutProps) {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [isSwitcherOpen, setIsSwitcherOpen] = useState(false)
+    const [activeMenu, setActiveMenu] = useState('Tổng quan')
     const { availableClinics, currentClinicId, setAvailableClinics, setCurrentClinicId } = useAI()
 
     useEffect(() => {
@@ -39,11 +41,44 @@ export default function ChatLayout({ children }: ChatLayoutProps) {
 
     const menuItems = [
         { icon: Home, label: 'Tổng quan' },
-        { icon: MessageSquare, label: 'Lịch sử tư vấn' },
+        { icon: MessageSquare, label: 'Lịch sử Chat' },
         { icon: Users, label: 'Bệnh nhân' },
         { icon: CreditCard, label: 'Thanh toán' },
         { icon: Settings, label: 'Cài đặt' },
     ]
+
+    const [tokenBalance, setTokenBalance] = useState<number>(0)
+
+    useEffect(() => {
+        if (currentClinicId) {
+            const fetchBalance = async () => {
+                const { data } = await supabase
+                    .from('clinics')
+                    .select('token_balance')
+                    .eq('id', currentClinicId)
+                    .maybeSingle()
+                if (data) setTokenBalance(data.token_balance)
+            }
+            fetchBalance()
+
+            // Subscribe to real-time updates for balance
+            const channel = supabase
+                .channel('balance-updates')
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'clinics',
+                    filter: `id=eq.${currentClinicId}`
+                }, (payload) => {
+                    setTokenBalance(payload.new.token_balance)
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [currentClinicId])
 
     return (
         <div className="flex h-[100dvh] bg-black text-gray-200">
@@ -55,13 +90,16 @@ export default function ChatLayout({ children }: ChatLayoutProps) {
                     {/* Header with Avatar Logo */}
                     <div className="flex items-center justify-between p-4">
                         {!sidebarCollapsed && (
-                            <div className="flex items-center space-x-3">
-                                <Avatar className="h-8 w-8 border border-white/20">
-                                    <AvatarImage src="https://api.dicebear.com/7.x/shapes/svg?seed=DEETWIN" />
-                                    <AvatarFallback>DT</AvatarFallback>
-                                </Avatar>
-                                <h1 className="text-lg font-bold text-white tracking-widest uppercase">DEETWIN</h1>
-                            </div>
+                                <div className="flex items-center space-x-3">
+                                    <Avatar className="h-8 w-8 border border-white/20">
+                                        <AvatarImage src="https://api.dicebear.com/7.x/shapes/svg?seed=DEETWIN" />
+                                        <AvatarFallback>DT</AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <h1 className="text-lg font-bold text-white tracking-widest uppercase">DEETWIN</h1>
+                                        <div className="text-[8px] bg-[#1DA1F2] text-white px-1 rounded inline-block font-bold">CLINIC MODE</div>
+                                    </div>
+                                </div>
                         )}
                         <Button
                             variant="ghost"
@@ -119,10 +157,15 @@ export default function ChatLayout({ children }: ChatLayoutProps) {
                                 <li key={item.label}>
                                     <Button
                                         variant="ghost"
-                                        className={`w-full justify-start ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                                        onClick={() => setActiveMenu(item.label)}
+                                        className={`w-full justify-start transition-all duration-200 ${sidebarCollapsed ? 'justify-center px-0' : 'px-4'} ${
+                                            activeMenu === item.label 
+                                            ? 'bg-[#1DA1F2]/20 text-[#1DA1F2] border-r-2 border-[#1DA1F2] rounded-none' 
+                                            : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                                        }`}
                                     >
-                                        <item.icon size={18} />
-                                        {!sidebarCollapsed && <span className="ml-3 font-medium text-[13px]">{item.label}</span>}
+                                        <item.icon size={18} className={activeMenu === item.label ? 'text-[#1DA1F2]' : ''} />
+                                        {!sidebarCollapsed && <span className="ml-3 font-bold text-[13px]">{item.label}</span>}
                                     </Button>
                                 </li>
                             ))}
@@ -135,7 +178,9 @@ export default function ChatLayout({ children }: ChatLayoutProps) {
                             {!sidebarCollapsed && (
                                 <div>
                                     <div className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Số dư Tokens</div>
-                                    <div className="text-2xl font-bold text-white tabular-nums">1.245</div>
+                                    <div className="text-2xl font-bold text-white tabular-nums">
+                                        {tokenBalance.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                    </div>
                                 </div>
                             )}
                             <div className={`rounded-xl bg-gray-900 border border-white/5 p-3 ${sidebarCollapsed ? 'mx-auto' : ''}`}>
@@ -165,8 +210,12 @@ export default function ChatLayout({ children }: ChatLayoutProps) {
             {/* Main content */}
             <main className="flex-1 overflow-hidden">
                 <div className="h-full p-6">
-                    <div className="h-full rounded-2xl border border-gray-800 bg-black">
-                        {children}
+                    <div className="h-full rounded-2xl border border-gray-800 bg-black overflow-hidden">
+                        {activeMenu === 'Lịch sử Chat' && currentClinicId ? (
+                            <ConsultationHistory clinicId={currentClinicId} />
+                        ) : (
+                            children
+                        )}
                     </div>
                 </div>
             </main>

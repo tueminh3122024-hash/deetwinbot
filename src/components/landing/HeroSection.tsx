@@ -37,6 +37,7 @@ export default function HeroSection() {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
+                                onClick={() => document.getElementById('live-mode')?.scrollIntoView({ behavior: 'smooth' })}
                                 className="px-8 py-3 rounded-full bg-gradient-to-r from-[#00D1FF] to-[#008fb3] text-black font-bold shadow-[0_0_20px_rgba(0,209,255,0.3)]"
                             >
                                 Bắt đầu Chat Live

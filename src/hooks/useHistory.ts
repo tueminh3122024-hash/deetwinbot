@@ -104,22 +104,7 @@ export function useHistory(sessionId: string | null) {
             return [session, ...others].slice(0, MAX_LOCAL_SESSIONS)
         })
 
-        // 2. Supabase (async, non-blocking)
-        const lastUser = messages.findLast((m) => m.role === 'user')
-        const lastAssistant = messages.findLast((m) => m.role === 'assistant')
-        const userText = (lastUser?.parts?.[0] as any)?.text
-        const assistantText = (lastAssistant?.parts?.[0] as any)?.text
-
-        if (userText && assistantText && (opts?.userId || opts?.clinicId)) {
-            supabase.from('chat_history').insert({
-                user_id: opts?.userId ?? null,
-                clinic_id: opts?.clinicId ?? null,
-                message: userText,
-                response: assistantText,
-            }).then(({ error }) => {
-                if (error) console.error('[useHistory] Supabase save error:', error)
-            })
-        }
+        // 2. The backend /api/chat/route.ts handles saving to Supabase chat_history.
     }, [sessionId])
 
     /**

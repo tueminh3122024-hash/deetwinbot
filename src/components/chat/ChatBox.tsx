@@ -190,12 +190,23 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, b
     const [attachments, setAttachments] = useState<Attachment[]>([])
     const [sessionUserId, setSessionUserId] = useState<string | null>(null)
     const [sessionClinicId, setSessionClinicId] = useState<string | null>(null)
+    const [botName, setBotName] = useState('DeeTwin')
+    const [botAvatar, setBotAvatar] = useState('https://deetwinapp.vercel.app/assets/public/avatar.995cc35baa763d8aaef9a5fe3954fe7d.gif')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     const [sessionId] = useState(() => `session-${Math.random().toString(36).slice(2)}`)
     const { sessions, saveSession } = useHistory(sessionId)
+
+    useEffect(() => {
+        const effectiveClinicId = clinicId || sessionClinicId
+        if (!effectiveClinicId) return
+        supabase.from('clinics').select('bot_name, bot_avatar_url').eq('id', effectiveClinicId).single().then(({ data }) => {
+            if (data?.bot_name) setBotName(data.bot_name)
+            if (data?.bot_avatar_url) setBotAvatar(data.bot_avatar_url)
+        })
+    }, [clinicId, sessionClinicId])
 
 
     // Android keyboard jitter fix — visualViewport API
@@ -260,8 +271,11 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, b
             saveSession([...messages, message], { userId: effectiveUserId, clinicId: clinicId || sessionClinicId })
 
             // Refresh token state to update UI in sidebar / tokens page automatically
-            if (used && clinicId) {
-                refreshTokens()
+            // Workaround: Add 400ms delay to ensure backend trigger has completed
+            if (clinicId || sessionClinicId) {
+                setTimeout(() => {
+                    refreshTokens(clinicId || sessionClinicId || undefined)
+                }, 400)
             }
         },
         onError: (err) => console.error('[ChatBox] error:', err),
@@ -303,26 +317,8 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, b
             fetchSharedHistory()
             return
         }
-
-        // Normal clinic dashboard → load from messages table
-        const fetchHistory = async () => {
-            const { data, error } = await supabase
-                .from('messages')
-                .select('role, content, created_at')
-                .eq('clinic_id', targetClinicId)
-                .order('created_at', { ascending: true })
-                .limit(20)
-
-            if (!error && data) {
-                const uiMessages: UIMessage[] = data.map((msg, idx) => ({
-                    id: `hist-${idx}`,
-                    role: msg.role as 'user' | 'assistant',
-                    parts: [{ type: 'text', text: msg.content }],
-                }))
-                setMessages(uiMessages)
-            }
-        }
-        fetchHistory()
+        // If not a shared booking session, we simply start a fresh chat.
+        // The admin history is viewable in the separate History tab.
     }, [clinicId, sessionClinicId, sessionUserId, setMessages])
 
     // ── Submit ──
@@ -394,17 +390,17 @@ export default function ChatBox({ clinicId, userId, onTokensUsed, placeholder, b
                     <div className="px-2 pt-6 space-y-4">
                         {/* Welcome greeting */}
                         <div className="flex flex-col items-center gap-3 text-center pb-2">
-                            <div className="h-14 w-14 rounded-full overflow-hidden border border-[#1f2937] shadow-xl shadow-sky-500/10 bg-black">
+                            <div className="h-14 w-14 rounded-full overflow-hidden border border-[#1f2937] shadow-xl shadow-sky-500/10 bg-black flex items-center justify-center">
                                 <img 
-                                    src="https://deetwinapp.vercel.app/assets/public/avatar.995cc35baa763d8aaef9a5fe3954fe7d.gif" 
-                                    alt="DeeTwin Welcome Avatar"
+                                    src={botAvatar}
+                                    alt={`${botName} Welcome Avatar`}
                                     className="h-full w-full object-cover"
                                 />
                             </div>
                             <div>
-                                <p className="text-white text-base font-semibold">Xin chào! Tôi là DeeTwin</p>
+                                <p className="text-white text-base font-semibold">Xin chào! Tôi là {botName}</p>
                                 <p className="text-gray-500 text-xs mt-1 leading-relaxed">
-                                    Nhập chỉ số sức khỏe bên dưới để nhận phân tích ngay,
+                                    Nhập câu hỏi hoặc chỉ số sức khỏe để nhận phân tích ngay,
                                     hoặc chụp ảnh phiếu xét nghiệm để AI tự điền.
                                 </p>
                             </div>

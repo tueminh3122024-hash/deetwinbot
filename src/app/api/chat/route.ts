@@ -40,6 +40,9 @@ function toModelMessage(msg: any) {
     return { role: msg.role, content: '' }
 }
 
+import { searchKnowledge } from '@/lib/actions/rag'
+import { MASTER_PROMPT_ASOP } from '@/lib/bot/prompts'
+
 // ── POST /api/chat ──
 export async function POST(request: NextRequest) {
     try {
@@ -53,6 +56,7 @@ export async function POST(request: NextRequest) {
                 { status: 400, headers: { 'Content-Type': 'application/json' } }
             )
         }
+        console.log('[API Chat] Received payload:', { clinicId, userId, bookingId, msgCount: messages.length });
 
         // 1. Fetch System & Clinic Prompts
         const { data: masterSetting } = await adminClient
@@ -62,20 +66,37 @@ export async function POST(request: NextRequest) {
             .maybeSingle()
         
         let clinicPrompt = ''
+        let currentBalance = 0
         if (clinicId) {
             const { data: clinic } = await adminClient
                 .from('clinics')
-                .select('custom_system_prompt')
+                .select('custom_system_prompt, token_balance')
                 .eq('id', clinicId)
                 .maybeSingle()
             clinicPrompt = clinic?.custom_system_prompt || ''
+            currentBalance = clinic?.token_balance || 0
         }
 
-        const baseSystemPrompt = masterSetting?.value || 'Bạn là DeeTwin, trợ lý y tế kỹ thuật số chuyên nghiệp.'
-        const fullSystemPrompt = `${baseSystemPrompt}\n\n${clinicPrompt}\n\nLưu ý: Nếu người dùng muốn đặt lịch khám, hãy sử dụng mã [WIDGET:BOOKING] để hiển thị form đặt lịch Tally. Nếu cần yêu cầu thanh toán, dùng [WIDGET:PAY].`
+        // 2. Token Check (Chốt chặn âm tiền)
+        if (clinicId && currentBalance <= 0) {
+            return new Response(
+                JSON.stringify({ error: 'INSUFFICIENT_TOKENS', message: 'Tài khoản đã hết Token. Vui lòng nạp thêm.' }),
+                { status: 402, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
 
-        // Convert UI messages → model messages
+        // Convert UI messages → model messages FIRST so we can extract the true content string (SDK v6 uses parts array)
         const modelMessages = messages.map(toModelMessage)
+
+        // 3. RAG: Search Knowledge Base
+        const lastUserMessage = modelMessages[modelMessages.length - 1]?.content || ''
+        const relevantContext = await searchKnowledge(lastUserMessage, clinicId)
+        const contextText = relevantContext.length > 0 
+            ? `\n\nKIẾN THỨC CHUYÊN MÔN TRA CỨU ĐƯỢC:\n${relevantContext.map(c => `[Từ ${c.source_name}]: ${c.content}`).join('\n')}`
+            : ''
+
+        const baseSystemPrompt = masterSetting?.value || MASTER_PROMPT_ASOP
+        const fullSystemPrompt = `${baseSystemPrompt}\n\n${clinicPrompt}${contextText}\n\nTHÔNG TIN HỆ THỐNG (KHÔNG PHẢN HỒI TRỰC TIẾP): \n- Số dư Token hiện tại: ${Number(currentBalance).toLocaleString('vi-VN')} tokens.\n\nLưu ý: Luôn dùng [WIDGET:BOOKING] nếu khách có nhu cầu đặt lịch.`
 
         // Call Gemini via streamText (Use Gemini 3 Flash Preview as requested)
         const result = streamText({
@@ -92,7 +113,7 @@ export async function POST(request: NextRequest) {
                 // to automatically handle 'token_balance' deduction.
                 // We just need to ensure the record is saved.
                 try {
-                    const lastUserMessage = messages[messages.length - 1]?.content || ''
+                    const lastUserMessage = modelMessages[modelMessages.length - 1]?.content || ''
                     
                     const { error: histError } = await adminClient
                         .from('chat_history')

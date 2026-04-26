@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { MessageSquare, Users, Coins, Settings, CalendarDays, UserCircle, Zap } from 'lucide-react'
+import { MessageSquare, Users, Coins, Settings, CalendarDays, UserCircle, Zap, History } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAI } from '@/components/providers/AIProvider'
 
@@ -16,13 +16,14 @@ interface Tab {
 
 const clinicTabs: Tab[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare, href: '/' },
+    { id: 'history', label: 'Lịch sử Chat', icon: History, href: '/clinic/history' },
     { id: 'appointments', label: 'Lịch hẹn', icon: CalendarDays, href: '/appointments' },
     { id: 'patients', label: 'Bệnh nhân', icon: Users, href: '/patients' },
     { id: 'tokens', label: 'Tokens', icon: Coins, href: '/tokens' },
     { id: 'settings', label: 'Cài đặt', icon: Settings, href: '/settings' },
 ]
 
-import { History } from 'lucide-react'
+
 
 const userTabs: Tab[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare, href: '/chat' },

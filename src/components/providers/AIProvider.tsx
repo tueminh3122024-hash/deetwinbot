@@ -26,7 +26,7 @@ export interface AIState {
     currentClinicId: string | null
     setAvailableClinics: (clinics: Array<{ id: string; name: string }>) => void
     setCurrentClinicId: (id: string | null) => void
-    refreshTokens: () => void
+    refreshTokens: (overrideClinicId?: string) => void
 }
 
 const AIContext = createContext<AIState | undefined>(undefined)
@@ -82,24 +82,25 @@ export function AIProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!currentClinicId) return
 
-        const channel = supabase
-            .channel(`clinic-tokens-${currentClinicId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'clinics',
-                    filter: `id=eq.${currentClinicId}`,
-                },
-                (payload) => {
-                    const newBalance = payload.new?.token_balance
-                    if (typeof newBalance === 'number') {
-                        setTokensRemaining(newBalance)
-                    }
+        // Use a unique channel name each time to avoid "after subscribe" errors in React
+        const channelId = `tokens-${currentClinicId}-${Math.random().toString(36).substring(7)}`
+        const channel = supabase.channel(channelId)
+        
+        channel.on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'clinics',
+                filter: `id=eq.${currentClinicId}`,
+            },
+            (payload) => {
+                const newBalance = payload.new?.token_balance
+                if (typeof newBalance === 'number') {
+                    setTokensRemaining(newBalance)
                 }
-            )
-            .subscribe()
+            }
+        ).subscribe()
 
         return () => {
             supabase.removeChannel(channel)
@@ -143,8 +144,9 @@ export function AIProvider({ children }: { children: ReactNode }) {
         currentClinicId,
         setAvailableClinics,
         setCurrentClinicId,
-        refreshTokens: () => {
-            if (currentClinicId) fetchTokenBalance(currentClinicId)
+        refreshTokens: (overrideClinicId?: string) => {
+            const idToFetch = overrideClinicId || currentClinicId;
+            if (idToFetch) fetchTokenBalance(idToFetch);
         }
     }
 

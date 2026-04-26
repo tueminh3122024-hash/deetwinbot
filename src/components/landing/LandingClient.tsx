@@ -9,6 +9,7 @@ import AIWaveform from './AIWaveform'
 import LiveVoiceManager from './LiveVoiceManager'
 import BamaBookingModal from '@/components/chat/BamaBookingModal'
 import { Activity, Shield, Zap, MessageSquare } from 'lucide-react'
+import { ConversationProvider } from '@elevenlabs/react'
 
 interface LandingClientProps {
     clinic: any
@@ -22,7 +23,8 @@ export default function LandingClient({ clinic, services, userId }: LandingClien
     const [liveVolume, setLiveVolume] = useState(0)
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white selection:bg-[#00D1FF]/30">
+        <ConversationProvider>
+            <div className="min-h-screen bg-[#050505] text-white selection:bg-[#00D1FF]/30">
             {/* Header / Nav */}
             <nav className="fixed top-0 w-full z-[100] bg-black/50 backdrop-blur-md border-b border-white/5 px-6 py-4">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -115,12 +117,33 @@ export default function LandingClient({ clinic, services, userId }: LandingClien
                 </div>
             </section>
 
-            {/* AI Live Mode Feature - Temporarily Hidden until API is stable */}
-            {/* 
-            <section className="py-20 px-6 bg-[#0a0a0a]">
-                ... (code ẩn đi) ...
+            {/* AI Live Mode Feature */}
+            <section id="live-mode" className="py-20 px-6 bg-[#0a0a0a] border-y border-white/5">
+                <div className="max-w-4xl mx-auto">
+                    <div className="text-center mb-12">
+                        <h2 className="text-3xl md:text-4xl font-bold mb-4">Trợ Lý Ảo DeeTwin</h2>
+                        <p className="text-gray-400">Trò chuyện trực tiếp bằng giọng nói với AI y tế thông minh nhất.</p>
+                    </div>
+
+                    <div className="p-6 md:p-12 rounded-[32px] md:rounded-[40px] bg-gradient-to-b from-[#111] to-black border border-white/10 shadow-2xl relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-[#00D1FF]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                        
+                        <div className="relative z-10 flex flex-col items-center">
+                            <LiveVoiceManager 
+                                onStateChange={(state) => setLiveState(state)}
+                                onVolumeChange={(vol) => setLiveVolume(vol)}
+                            />
+                            
+                            <div className="mt-12 w-full max-w-md">
+                                <AIWaveform 
+                                    isLive={liveState === 'active'} 
+                                    volume={liveVolume} 
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
-            */}
 
             {/* Footer */}
             <footer className="py-12 border-t border-white/5 text-center text-gray-500 text-sm">
@@ -138,5 +161,6 @@ export default function LandingClient({ clinic, services, userId }: LandingClien
                 userId={userId || ''} 
             />
         </div>
+        </ConversationProvider>
     )
 }

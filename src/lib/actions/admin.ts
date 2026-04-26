@@ -185,3 +185,25 @@ export async function createClinic(data: {
         return { success: false, error: err.message }
     }
 }
+
+export async function requestTopUp(clinicId: string) {
+    const { error } = await adminClient
+        .from('clinics')
+        .update({ needs_topup: true })
+        .eq('id', clinicId)
+
+    if (error) {
+        console.error('Error requesting topup:', error)
+        return { success: false, error: error.message }
+    }
+    return { success: true }
+}
+
+export async function deleteChatHistory(historyId: string) {
+    const { error } = await adminClient.from('chat_history').delete().eq('id', historyId)
+    if (error) {
+        console.error('Error deleting chat history:', error)
+        return { success: false, error: error.message }
+    }
+    return { success: true }
+}
